@@ -1,0 +1,17 @@
+{
+  "project": "touche",
+  "account_id": "83e248e9a6c0bde11d8ecf87f047437f",
+  "d1": {
+    "binding": "DB",
+    "database_name": "touche-reservas",
+    "database_id": "bf32352a-a3c9-4da9-b627-e17638a3805e"
+  },
+  "worker_deployed": true,
+  "worker": {
+    "name": "touche-admin-api",
+    "origin": "https://touche-admin-api.fabrizziopelaez91.workers.dev",
+    "access": "private-web-session-and-server-side-bearer-token"
+  },
+  "application_url": "https://touche-admin-api.fabrizziopelaez91.workers.dev/",
+  "frontend_deployed": true
+}

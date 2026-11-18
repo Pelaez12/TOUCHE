@@ -1,0 +1,31 @@
+import {readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import assert from 'node:assert/strict';
+const origin='https://touche-admin-api.fabrizziopelaez91.workers.dev';
+const key=(await readFile(new URL('../.local/ACCESO_TOUCHE.txt',import.meta.url),'utf8')).match(/Clave de acceso: (\S+)/)[1];
+const get=(path,headers={})=>fetch(origin+path,{headers,redirect:'manual'});
+const login=(email,password,requestOrigin=origin)=>fetch(origin+'/api/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:requestOrigin},body:JSON.stringify({email,password})});
+assert.equal((await get('/')).status,303);
+assert.equal((await get('/api/history')).status,401);
+assert.equal((await get('/data/history.json')).status,404);
+assert.equal((await get('/.local/admin-token')).status,404);
+assert.equal((await login('admin@touche.pe','invalid-synthetic-key')).status,401);
+assert.equal((await login('silvia@touche.pe','invalid-synthetic-key')).status,401);
+assert.equal((await login('admin@touche.pe',key,'https://outside.invalid')).status,403);
+const authenticated=await login('admin@touche.pe',key);assert.equal(authenticated.status,200);
+const setCookie=authenticated.headers.get('set-cookie');assert(setCookie.includes('HttpOnly')&&setCookie.includes('Secure')&&setCookie.includes('SameSite=Strict'));
+const cookie=setCookie.split(';')[0],headers={Cookie:cookie};
+assert.equal((await get('/',headers)).status,200);
+const sess=await (await get('/api/session',headers)).json();
+assert.equal(sess.authenticated,true);assert.equal(sess.user?.role,'admin');
+const accts=await (await get('/api/accounts',headers)).json();
+assert.equal(accts.accounts.filter(a=>a.role==='admin').length,1);
+const history=await get('/api/history',headers);assert.equal(history.status,200);const data=await history.json();assert(data.clients.length>=520&&data.events.length>=1551);
+assert.equal((await fetch(origin+'/api/agenda/notes',{method:'PATCH',headers:{...headers,'Content-Type':'application/json',Origin:'https://outside.invalid'},body:JSON.stringify({date:'2099-01-01',notes:'Must not be saved'})})).status,403);
+for(const path of ['/index.html','/agenda.mjs','/clients.mjs','/accounts.mjs','/brand/logo.png']){
+  const remote=await get(path,headers);assert.equal(remote.status,200);
+  const local=await readFile(new URL('../public'+path,import.meta.url));const remoteBytes=new Uint8Array(await remote.arrayBuffer());assert.equal(createHash('sha256').update(remoteBytes).digest('hex'),createHash('sha256').update(local).digest('hex'));
+}
+assert.equal((await fetch(origin+'/api/logout',{method:'POST',headers:{...headers,Origin:origin,'Content-Type':'application/json'},body:'{}'})).status,200);
+assert.equal((await get('/api/history',headers)).status,401);
+console.log(JSON.stringify({published:true,anonymousDataBlocked:true,privateFilesBlocked:true,login:true,accounts:accts.accounts.length,cookieFlags:true,crossOriginWriteBlocked:true,logoutRevokesSession:true,publicAssetsMatch:true,clients:data.clients.length,treatments:data.events.length}));

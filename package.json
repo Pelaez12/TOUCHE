@@ -1,0 +1,13 @@
+{
+  "name": "touche-retorno",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --experimental-sqlite --test tests/*.test.mjs",
+    "pretest": "node scripts/build_worker_assets.mjs"
+  },
+  "devDependencies": {
+    "@phosphor-icons/core": "^2.1.1"
+  }
+}

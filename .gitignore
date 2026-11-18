@@ -1,0 +1,10 @@
+data/
+artifacts/
+target/
+*.log
+.local/
+node_modules/
+worker/assets.generated.mjs
+
+__pycache__/
+*.pyc
