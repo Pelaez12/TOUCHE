@@ -26,15 +26,15 @@ No se ha definido capacidad simultánea del salón, roster de profesionales, tur
 
 ## Persistencia y pruebas
 
-Migraciones aplicadas en producción: `0005` DNI, `0006` agenda/notas/horario, `0007` asesoría y `0008` acceso web. No reaplicarlas.
+Migraciones aplicadas en producción: `0005` DNI, `0006` agenda/notas/horario, `0007` asesoría, `0008` acceso web, `0009` operación interna y `0010` cuentas internas. No reaplicarlas.
 
-### Actualización Proceso Interno v1 (implementado localmente, pendiente de despliegue remoto — 18/11/2026)
+### Actualización Proceso Interno v1 y cuentas internas (desplegado y verificado en producción — 18/11/2026)
 
-Migración preparada: `migrations/0009_internal_operations.sql` (verificada en SQLite desde `0001..0009`, pendiente de ejecutar en D1 remoto `touche-reservas`). Incorpora:
+Migraciones aplicadas en D1 remoto `touche-reservas`: `migrations/0009_internal_operations.sql` y `migrations/0010_internal_accounts.sql` (respaldo previo en `data/backups/before-0009-0010-20261118.sql`). Incorporan:
 - Equipo real (`Milagros`, `Miriam`, `Maritza`, `Martha` junior/asistente, `Silvia` recepción), descansos fijos (admitiendo descanso compartido de Miriam y Martha los martes con aviso informativo), excepciones urgentes con alerta de citas afectadas y matriz de especialidades (`primary`, `junior`, `plan_b`).
 - Tablero diario en columnas por colaboradora activa, registro de orden de llegada física (`staff_daily_shifts`) y doble modalidad de reserva (`requested` vs. `pool_turn` con asignación automática por orden de llegada y prioridad de nivel).
 - Tiempos base confirmados por servicio (`services.duration_minutes` y `duration_max_minutes`) editables desde Agenda y por cita.
 - Seguimiento completo de citas: recordatorios WhatsApp (`wa.me`) en día anterior y mismo día, confirmación, reprogramación con motivo y bitácora (`appointment_events`), registro de `no_show` sin crear atención, y finalización con notas técnicas guardadas en `treatments.technical_notes` (visibles al volver a agendar a la clienta).
 - Optimización de carga: `GET /api/agenda?bootstrap=1`, carga diferida en el resto de pestañas, `debounce` (150 ms) con selector acotado a 25 clientas e `ETag`/`304` en assets estáticos.
 
-Pruebas verificadas: `npm test` aprueba **26/26 pruebas** (límites horarios, fechas imposibles, descansos semanales, capacidad real por día, check-in físico, `pool_turn` futuro y autoasignación, recordatorios, confirmaciones, reprogramaciones, `no_show`, excepciones, edición de duraciones, notas técnicas al completar y caché `ETag`/`304`). Comprobaciones de integración usan SQLite en memoria y fichas sintéticas sin tocar datos reales.
+Pruebas verificadas: `npm test` aprueba **28/28 pruebas** (límites horarios, fechas imposibles, descansos semanales, capacidad real por día, check-in físico, `pool_turn` futuro y autoasignación, recordatorios, confirmaciones, reprogramaciones, `no_show`, excepciones, edición de duraciones, notas técnicas al completar, RBAC de cuentas internas y caché `ETag`/`304`). Publicación en Cloudflare verificada en vivo con `scripts/check_web_access.mjs`. Comprobaciones automáticas usan SQLite en memoria y fichas sintéticas sin tocar datos reales.

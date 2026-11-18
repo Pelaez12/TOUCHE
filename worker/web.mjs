@@ -17,11 +17,17 @@ async function session(request,db){
   return await db.prepare(`SELECT s.token_hash,a.id AS accountId,a.email,a.display_name AS displayName,a.role,a.staff_id AS staffId FROM web_sessions s JOIN web_accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.expires_at>? AND a.active=1 AND a.password_hash IS NOT NULL`).bind(hash,Math.floor(Date.now()/1000)).first();
 }
 
+function etagMatches(header,etag){
+  if(!header||!etag)return false;
+  const target=etag.replace(/^W\//,'');
+  return header.split(',').some(tag=>{const t=tag.trim();return t==='*'||t.replace(/^W\//,'')===target;});
+}
+
 function asset(path,request,status=200){
   const a=assets[path];if(!a)return new Response('No encontrado',{status:404,headers:security});
   const isHtml=path.endsWith('.html');
   const headers=isHtml?{...security,'Content-Type':a.type}:{...securityBase,'Cache-Control':staticCache,'Content-Type':a.type,...(a.etag?{ETag:a.etag}:{})};
-  if(!isHtml&&a.etag&&request?.headers?.get('if-none-match')===a.etag)return new Response(null,{status:304,headers});
+  if(!isHtml&&a.etag&&etagMatches(request?.headers?.get('if-none-match'),a.etag))return new Response(null,{status:304,headers});
   const bytes=Uint8Array.from(atob(a.data),c=>c.charCodeAt(0));
   return new Response(bytes,{status,headers});
 }

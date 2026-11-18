@@ -246,6 +246,8 @@ test('static assets support ETag and 304 caching while HTML keeps no-store',asyn
   assert.match(r1.headers.get('cache-control')||'',/max-age=/);
   const r2=await worker.fetch(new Request('https://example.invalid/style.css',{headers:{'if-none-match':etag}}),{});
   assert.equal(r2.status,304);
+  const r3=await worker.fetch(new Request('https://example.invalid/style.css',{headers:{'if-none-match':'W/'+etag}}),{});
+  assert.equal(r3.status,304);
 
   const login=await worker.fetch(new Request('https://example.invalid/login'),{});
   assert.equal(login.headers.get('cache-control'),'no-store');

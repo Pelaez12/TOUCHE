@@ -24,13 +24,11 @@ La clave inicial del administrador, generada con 192 bits de entropía, está en
 4. Mantener compatibilidad 2026-10-27 y observabilidad configurada. Solo el contenido de `public/` puede entrar en el módulo de recursos generado; nunca data/ ni .local/.
 5. Comprobar acceso anónimo, autenticado, cierre de sesión y correspondencia de recursos. `scripts/check_web_access.mjs` comprueba estos límites sin imprimir claves ni cookies.
 
-La migración 0008 ya está aplicada. `scripts/prepare_web_access.mjs` fue usado una sola vez; no reinicializar el acceso ni publicar el plan privado de configuración. Una rotación posterior debe ser explícita y revocar las sesiones activas.
+La migración 0008, `0009_internal_operations` y `0010_internal_accounts` ya están aplicadas en D1 remoto `touche-reservas` (respaldo previo guardado en `data/backups/before-0009-0010-20261118.sql`). No reaplicarlas ni reinicializar `scripts/prepare_web_access.mjs`. Despliegue reproducible mediante `wrangler.jsonc` (`compatibility_date: 2026-10-27`, `observability: enabled`, `preview_urls: false`).
 
-## Verificación realizada
+## Verificación realizada (18 de noviembre de 2026)
 
-- 21 pruebas JavaScript aprobadas.
-- Anónimos: raíz redirige al acceso, historial responde 401, archivos privados 404.
-- Inicio válido y API autenticada comprobados; las escrituras desde un origen ajeno reciben 403.
-- Cookie con protecciones y cierre que revoca la sesión verificados.
-- HTML, módulos de agenda/clientas y logotipo publicados coinciden por SHA-256 con sus fuentes.
-- Alta desde Agenda verificada con ficha y cita sintéticas, retiradas al finalizar. Se conservaron las 520 fichas y 1.551 atenciones reales.
+- 28 pruebas JavaScript aprobadas (`npm test`), incluyendo migraciones `0001..0010`, RBAC y `ETag` fuerte/débil (`W/`).
+- D1 remoto verificado tras `0009` y `0010`: `PRAGMA foreign_key_check` sin errores, `520` clientas activas, `1.551` atenciones reales, `0` citas de prueba, `5` colaboradoras en `staff`, `52` servicios con duración base y `6` cuentas internas (`1` admin activa + `5` colaboradoras pendientes).
+- En vivo (`scripts/check_web_access.mjs`): raíz anónima `303 -> /login`, `/api/history` anónimo `401`, archivos privados `404`, origen ajeno `403`, login de `admin@touche.pe` con clave actual `200`, cookie `HttpOnly; Secure; SameSite=Strict`, cierre revoca sesión y coincidencia SHA-256 de recursos publicados.
+- Caché estática en vivo: `/style.css` devuelve `Cache-Control: public, max-age=300, stale-while-revalidate=86400` y `304 Not Modified` ante `If-None-Match` con `W/` de Cloudflare; HTML y `/api/*` mantienen `Cache-Control: no-store`.
