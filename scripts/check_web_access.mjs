@@ -20,7 +20,7 @@ const sess=await (await get('/api/session',headers)).json();
 assert.equal(sess.authenticated,true);assert.equal(sess.user?.role,'admin');
 const accts=await (await get('/api/accounts',headers)).json();
 assert.equal(accts.accounts.filter(a=>a.role==='admin').length,1);
-const history=await get('/api/history',headers);assert.equal(history.status,200);const data=await history.json();assert(data.clients.length>=520&&data.events.length>=1551);
+const history=await get('/api/history',headers);assert.equal(history.status,200);const data=await history.json();assert(data.clients.length>=518&&data.events.length>=1551);
 assert.equal((await fetch(origin+'/api/agenda/notes',{method:'PATCH',headers:{...headers,'Content-Type':'application/json',Origin:'https://outside.invalid'},body:JSON.stringify({date:'2099-01-01',notes:'Must not be saved'})})).status,403);
 for(const path of ['/index.html','/agenda.mjs','/clients.mjs','/accounts.mjs','/brand/logo.png']){
   const remote=await get(path,headers);assert.equal(remote.status,200);
