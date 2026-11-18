@@ -252,3 +252,64 @@ test('static assets support ETag and 304 caching while HTML keeps no-store',asyn
   const login=await worker.fetch(new Request('https://example.invalid/login'),{});
   assert.equal(login.headers.get('cache-control'),'no-store');
 });
+
+test('admin can add, edit, update services/capabilities, retire/reactivate and delete staff dynamically',async()=>{
+  const {sqlite,db}=createMigratedDb();
+
+  // 1) Maritza initially cannot do CORTE (catalog-24) -> 409
+  const beforeCorte=await apiReq(db,'/api/appointments','POST',{clientId:'client-1',serviceId:'catalog-24',staffId:'staff-maritza',assignmentMode:'requested',date:'2026-11-26',time:'10:00',duration:40});
+  assert.equal(beforeCorte.status,409);
+
+  // 2) Maritza learns CORTE -> Admin updates her capabilities -> now CORTE books cleanly!
+  const addCap=await apiReq(db,'/api/staff/staff-maritza/capabilities','PUT',{
+    categories:[
+      {category:'COLOR',capabilityLevel:'primary'},
+      {category:'CORTE',capabilityLevel:'primary'}
+    ],
+    serviceOverrides:[{serviceId:'catalog-26',capabilityLevel:'primary'}]
+  });
+  assert.equal(addCap.status,200);
+  const afterCorte=await apiReq(db,'/api/appointments','POST',{clientId:'client-1',serviceId:'catalog-24',staffId:'staff-maritza',assignmentMode:'requested',date:'2026-11-26',time:'10:00',duration:40});
+  assert.equal(afterCorte.status,201);
+
+  // 3) Cannot retire/delete Maritza while she has a scheduled appointment -> 409
+  const blockedDel=await apiReq(db,'/api/staff/staff-maritza','DELETE');
+  assert.equal(blockedDel.status,409);
+
+  // Cancel that appointment -> Maritza has linked account + appointment history -> DELETE retires (active=0) preserving history!
+  assert.equal((await apiReq(db,`/api/appointments/${afterCorte.body.id}/cancel`,'POST',{reason:'Prueba'})).status,200);
+  const retired=await apiReq(db,'/api/staff/staff-maritza','DELETE');
+  assert.equal(retired.status,200);
+  assert.equal(retired.body.archived,true);
+  assert.equal(sqlite.prepare("SELECT active FROM staff WHERE id='staff-maritza'").get().active,0);
+
+  // Reactivate Maritza cleanly with partial PATCH
+  assert.equal((await apiReq(db,'/api/staff/staff-maritza','PATCH',{active:true})).status,200);
+  assert.equal(sqlite.prepare("SELECT active FROM staff WHERE id='staff-maritza'").get().active,1);
+
+  // 4) Admin hires a brand-new Manicurist (POST /api/staff) with primary MANOS / PIES -> she outranks plan_b Miriam & Maritza!
+  const created=await apiReq(db,'/api/staff','POST',{
+    displayName:'Ana Torres',shortName:'Ana',role:'manicurist',restWeekday:1,canHoldAppointments:true,
+    specialtySummary:'Manicure y pedicure especialista',
+    categories:[{category:'MANOS / PIES',capabilityLevel:'primary'},{category:'DEPILACION',capabilityLevel:'primary'}]
+  });
+  assert.equal(created.status,201);
+  assert.ok(created.body.sharedRestWith.includes('Milagros Núñez'));
+
+  // Log check-in on Thursday: Miriam 1st, Ana 2nd -> for MANOS / PIES, Ana (primary) MUST be assigned ahead of Miriam (plan_b)!
+  assert.equal((await apiReq(db,'/api/agenda/shifts','PUT',{day:'2026-11-19',shifts:[
+    {staffId:'staff-miriam',turnOrder:1,status:'present'},
+    {staffId:created.body.id,turnOrder:2,status:'present'}
+  ]})).status,200);
+  const mani=await apiReq(db,'/api/appointments','POST',{clientId:'client-2',serviceId:'catalog-13',assignmentMode:'pool_turn',date:'2026-11-19',time:'14:00',duration:45});
+  assert.equal(mani.status,201);
+  assert.equal(mani.body.staffId,created.body.id);
+
+  // 5) Brand-new unused staff member is hard-deleted cleanly
+  const tempStaff=await apiReq(db,'/api/staff','POST',{displayName:'Prueba Temporal',role:'stylist',restWeekday:null});
+  assert.equal(tempStaff.status,201);
+  const hardDel=await apiReq(db,'/api/staff/'+tempStaff.body.id,'DELETE');
+  assert.equal(hardDel.status,200);
+  assert.equal(hardDel.body.deleted,true);
+  assert.equal(sqlite.prepare('SELECT id FROM staff WHERE id=?').get(tempStaff.body.id),undefined);
+});

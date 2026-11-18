@@ -7,9 +7,10 @@ const fmtDay=d=>new Intl.DateTimeFormat('es-PE',{weekday:'long',day:'numeric',mo
 const clean=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const node=(tag,value,cls)=>{const n=document.createElement(tag);if(value!==undefined)n.textContent=value;if(cls)n.className=cls;return n;};
 const WEEKDAYS=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-const CAP_LABELS={primary:'Titular',junior:'Junior',plan_b:'Plan B temporal'};
+const ROLE_LABELS={stylist:'Estilista titular',junior_stylist_assistant:'Asistente y colorista junior',manicurist:'Manicurista / Estética',reception:'Recepción'};
+const CAP_LABELS={primary:'Titular',junior:'Nivel junior',plan_b:'Apoyo temporal',disabled:'No realiza'};
 const CAP_RANK={primary:1,junior:2,plan_b:3};
-const CONFIRM_LABELS={unconfirmed:'Sin confirmar',reminded_day_before:'Recordada (día previo)',reminded_same_day:'Recordada (hoy)',confirmed:'Confirmada',rescheduled:'Reprogramada'};
+const CONFIRM_LABELS={unconfirmed:'Sin confirmar',reminded_day_before:'Recordada (día antes)',reminded_same_day:'Recordada (hoy)',confirmed:'Confirmada',rescheduled:'Reprogramada'};
 
 let date=today(),month=date.slice(0,7),appointments=[],clients=[],services=[],preferences=null;
 let staff=[],categoryCaps=[],serviceOverrides=[],exceptions=[],dailyShifts=[];
@@ -18,7 +19,7 @@ let activeFilter='all',noteDirty=false,loading=false,loadId=0,bootstrapped=false
 async function api(path,options={}){
   const r=await fetch(path,{...options,headers:{'Content-Type':'application/json',...options.headers}});
   const body=await r.json();
-  if(!r.ok)throw Error(body.error||'No se pudo guardar en Cloudflare.');
+  if(!r.ok)throw Error(body.error||'No se pudo guardar. Inténtalo de nuevo.');
   return body;
 }
 function message(value,error=false){$('agenda-status').textContent=value;$('agenda-status').className=error?'notice error-notice':'field-help';}
@@ -99,7 +100,7 @@ function renderShiftsBar(){
   const working=staff.filter(s=>s.active&&s.canHoldAppointments&&staffDayStatus(s,date).working);
   if(!working.length)return;
   const head=node('div',undefined,'shifts-head');
-  head.append(node('strong','Orden de llegada física (09:00) · Turnos sin preferencia'),node('small','Define quién llegó 1.º, 2.º, 3.º hoy para asignar citas por turno.'));
+  head.append(node('strong','Orden de llegada (9:00 a.m.) · Turnos sin estilista pedida'),node('small','Marca quién llegó 1.º, 2.º y 3.º hoy para repartir los turnos.'));
   bar.append(head);
 
   const shiftMap=new Map(dailyShifts.map(s=>[s.staffId,s]));
@@ -190,11 +191,11 @@ function buildAppointmentCard(a){
   tags.append(node('span',a.assignmentMode==='pool_turn'?'Por turno':'Solicitada','mini-tag'));
   const svc=services.find(s=>s.id===a.serviceId);
   const cap=a.staffId&&svc?resolveCap(a.staffId,svc):null;
-  if(cap==='plan_b')tags.append(node('span','Plan B temporal','mini-tag warn'));
+  if(cap==='plan_b')tags.append(node('span','Apoyo temporal','mini-tag warn'));
   if(cap==='junior')tags.append(node('span','Colorista junior','mini-tag soft'));
-  if(a.rescheduleCount>0)tags.append(node('span',`Reprog. ${a.rescheduleCount}×`,'mini-tag warn'));
-  if(a.clientNoShows>0)tags.append(node('span',`${a.clientNoShows} no-show`,'mini-tag danger'));
-  if(!whatsappPhone(a.clientPhone))tags.append(node('span','Sin WhatsApp válido','mini-tag warn'));
+  if(a.rescheduleCount>0)tags.append(node('span',`Reprogramada ${a.rescheduleCount} ${a.rescheduleCount===1?'vez':'veces'}`,'mini-tag warn'));
+  if(a.clientNoShows>0)tags.append(node('span',`${a.clientNoShows} inasistencia${a.clientNoShows===1?'':'s'}`,'mini-tag danger'));
+  if(!whatsappPhone(a.clientPhone))tags.append(node('span','Falta celular','mini-tag warn'));
   body.append(tags);
   if(a.notes)body.append(node('p',a.notes,'appointment-note'));
   if(a.cancelReason&&(a.status==='cancelled'||a.status==='no_show'))body.append(node('small','Motivo: '+a.cancelReason));
@@ -212,7 +213,7 @@ function buildAppointmentCard(a){
       actions.append(assignBtn);
     }
     if(whatsappPhone(a.clientPhone)){
-      for(const [moment,label] of [['day_before','WA día previo'],['same_day','WA hoy']]){
+      for(const [moment,label] of [['day_before','Recordar (día antes)'],['same_day','Recordar (hoy)']]){
         const wa=node('button',label,'tiny-btn message-button');wa.type='button';
         wa.addEventListener('click',async()=>{
           try{
@@ -318,10 +319,10 @@ async function load(forceBootstrap=false){
     if(!noteDirty)$('agenda-day-notes').value=data.dayNote.notes;
     $('agenda-open').value=preferences.openTime;$('agenda-close').value=preferences.closeTime;
     for(const box of document.querySelectorAll('[data-agenda-weekday]'))box.checked=preferences.weekdays.includes(Number(box.value));
-    const hoursTxt=`Horario: ${preferences.openTime}–${preferences.closeTime} · America/Lima`;
+    const hoursTxt=`Horario del salón: ${preferences.openTime} a ${preferences.closeTime}`;
     $('agenda-hours-label').textContent=hoursTxt;
     if($('agenda-hours-readonly'))$('agenda-hours-readonly').textContent=hoursTxt;
-    render();message('Agenda sincronizada con Cloudflare D1.');
+    render();message('Agenda al día.');
   }catch(e){message(e.message,true);}
   finally{loading=false;$('agenda-refresh').disabled=false;$('agenda-new').disabled=!preferences;}
 }
@@ -521,31 +522,135 @@ $('agenda-confirm-save').addEventListener('click',async()=>{
   finally{b.disabled=false;}
 });
 
-/* Team & service durations modal */
+/* Team, services per stylist & service durations modal */
+let pendingDeleteStaff=null,editingOverrides=[];
+
+function catalogCategories(){
+  const cats=[...new Set(services.map(s=>s.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  return cats.length?cats:['ASESORÍA','COLOR','CORTE','DEPILACION','MANOS / PIES','MAQUILLAJE','PEINADO','QUÍMICO','TRATAMIENTO'];
+}
+
+function summarizeStaffServices(member){
+  if(!member.canHoldAppointments)return 'No atiende citas en agenda';
+  const cats=categoryCaps.filter(c=>c.staffId===member.id);
+  const ovrs=serviceOverrides.filter(o=>o.staffId===member.id&&o.capabilityLevel!=='disabled');
+  const tags=[];
+  for(const c of cats){
+    tags.push(c.capabilityLevel==='primary'?c.category:`${c.category} (${CAP_LABELS[c.capabilityLevel]||c.capabilityLevel})`);
+  }
+  if(ovrs.length)tags.push(`+${ovrs.length} servicio${ovrs.length===1?'':'s'} puntual${ovrs.length===1?'':'es'}`);
+  return tags.length?tags.join(' · '):'Sin servicios asignados aún';
+}
+
 function renderStaffModal(){
-  const list=$('staff-settings-list');list.replaceChildren();
-  for(const m of staff){
-    const row=node('div',undefined,'staff-setting-row');
-    const info=node('div');info.append(node('strong',`${m.displayName} (${m.shortName})`),node('small',m.specialtySummary||m.role));
-    const sel=document.createElement('select');
-    sel.append(new Option('Sin descanso fijo',''));
-    WEEKDAYS.forEach((w,i)=>sel.append(new Option('Descansa '+w,String(i))));
-    sel.value=m.restWeekday===null||m.restWeekday===undefined?'':String(m.restWeekday);
-    const save=node('button','Guardar','tiny-btn');save.type='button';
-    save.addEventListener('click',async()=>{
-      save.disabled=true;
+  const activeList=$('staff-settings-list');activeList.replaceChildren();
+  const inactiveWrap=$('staff-inactive-wrap'),inactiveList=$('staff-inactive-list');
+  inactiveList.replaceChildren();
+  const actives=staff.filter(m=>m.active);
+  const inactives=staff.filter(m=>!m.active);
+
+  for(const m of actives){
+    const row=node('div',undefined,'staff-card-row');
+    const info=node('div',undefined,'staff-card-info');
+    const title=node('strong',`${m.displayName}${m.shortName&&m.shortName!==m.displayName?` (${m.shortName})`:''}`);
+    const meta=node('small',`${ROLE_LABELS[m.role]||m.role} · ${m.restWeekday===null||m.restWeekday===undefined?'Sin descanso fijo':'Descansa '+WEEKDAYS[m.restWeekday]}`);
+    const svcs=node('small',summarizeStaffServices(m),'staff-services-pill');
+    info.append(title,meta,svcs);
+
+    const actions=node('div',undefined,'staff-card-actions');
+    const editBtn=node('button','Editar y servicios','tiny-btn');editBtn.type='button';
+    editBtn.addEventListener('click',()=>openStaffEditor(m));
+    const delBtn=node('button','Retirar','tiny-btn danger-outline');delBtn.type='button';
+    delBtn.addEventListener('click',()=>openStaffDelete(m));
+    actions.append(editBtn,delBtn);
+
+    row.append(info,actions);
+    activeList.append(row);
+  }
+
+  inactiveWrap.hidden=inactives.length===0;
+  for(const m of inactives){
+    const row=node('div',undefined,'staff-card-row inactive');
+    const info=node('div',undefined,'staff-card-info');
+    info.append(node('strong',m.displayName),node('small',`${ROLE_LABELS[m.role]||m.role} · Retirada del equipo activo`));
+    const actions=node('div',undefined,'staff-card-actions');
+    const restoreBtn=node('button','Reactivar','tiny-btn');restoreBtn.type='button';
+    restoreBtn.addEventListener('click',async()=>{
+      restoreBtn.disabled=true;
       try{
-        const res=await api('/api/staff/'+m.id,{method:'PATCH',body:JSON.stringify({restWeekday:sel.value===''?null:Number(sel.value)})});
-        $('staff-settings-status').textContent=res.sharedRestWith?.length
-          ?`Guardado. Aviso informativo: comparte descanso con ${res.sharedRestWith.join(', ')}.`
-          :'Descanso guardado en Cloudflare.';
-        await load();
-      }catch(e){$('staff-settings-status').textContent=e.message;}
-      finally{save.disabled=false;}
+        await api('/api/staff/'+m.id,{method:'PATCH',body:JSON.stringify({active:true})});
+        $('staff-settings-status').textContent=`${m.displayName} volvió al equipo activo.`;
+        await load();renderStaffModal();
+      }catch(e){$('staff-settings-status').textContent=e.message;restoreBtn.disabled=false;}
     });
-    row.append(info,sel,save);list.append(row);
+    actions.append(restoreBtn);
+    row.append(info,actions);
+    inactiveList.append(row);
   }
   renderServiceDurations();
+}
+
+function renderStaffOverridesEditor(){
+  const list=$('staff-ovr-list');list.replaceChildren();
+  if(!editingOverrides.length){
+    list.append(node('p','Sin excepciones puntuales.','field-help'));
+    return;
+  }
+  for(const ovr of editingOverrides){
+    const svc=services.find(s=>s.id===ovr.serviceId);
+    const chip=node('div',undefined,'ovr-chip');
+    chip.append(node('span',`${svc?svc.name:ovr.serviceId} · ${CAP_LABELS[ovr.capabilityLevel]||ovr.capabilityLevel}`));
+    const rm=node('button','×','tiny-btn');rm.type='button';rm.title='Quitar';
+    rm.addEventListener('click',()=>{editingOverrides=editingOverrides.filter(o=>o.serviceId!==ovr.serviceId);renderStaffOverridesEditor();});
+    chip.append(rm);
+    list.append(chip);
+  }
+}
+
+function openStaffEditor(member=null){
+  $('staff-editor-form').reset();
+  $('staff-editor-error').hidden=true;
+  $('staff-edit-id').value=member?.id||'';
+  $('staff-editor-title').textContent=member?`Editar a ${member.displayName}`:'Agregar colaboradora';
+  $('staff-edit-name').value=member?.displayName||'';
+  $('staff-edit-short').value=member?.shortName||'';
+  $('staff-edit-role').value=member?.role||'stylist';
+  $('staff-edit-rest').value=member&&member.restWeekday!==null&&member.restWeekday!==undefined?String(member.restWeekday):'';
+  $('staff-edit-holds').checked=member?!!member.canHoldAppointments:true;
+  $('staff-edit-summary').value=member?.specialtySummary||'';
+  $('staff-capabilities-section').hidden=!$('staff-edit-holds').checked;
+
+  // Build category capabilities dropdowns
+  const grid=$('staff-cat-grid');grid.replaceChildren();
+  const capMap=new Map(member?categoryCaps.filter(c=>c.staffId===member.id).map(c=>[c.category,c.capabilityLevel]):[]);
+  for(const cat of catalogCategories()){
+    const item=node('label',undefined,'staff-cat-item');
+    item.append(node('span',cat));
+    const sel=document.createElement('select');
+    sel.dataset.staffCat=cat;
+    sel.append(new Option('No realiza',''),new Option('Titular (principal)','primary'),new Option('Nivel junior','junior'),new Option('Apoyo temporal','plan_b'));
+    sel.value=capMap.get(cat)||'';
+    item.append(sel);
+    grid.append(item);
+  }
+
+  // Populate service picker & existing overrides
+  const ovrSel=$('staff-ovr-service');ovrSel.replaceChildren();
+  for(const s of services)ovrSel.append(new Option(`${s.category} · ${s.name}`,s.id));
+  editingOverrides=member?serviceOverrides.filter(o=>o.staffId===member.id).map(o=>({serviceId:o.serviceId,capabilityLevel:o.capabilityLevel})):[];
+  renderStaffOverridesEditor();
+
+  $('staff-editor-save').disabled=false;
+  $('staff-editor-modal').showModal();
+  $('staff-edit-name').focus();
+}
+
+function openStaffDelete(member){
+  pendingDeleteStaff=member;
+  $('staff-delete-desc').textContent=`¿Deseas retirar a ${member.displayName} del equipo activo?`;
+  $('staff-delete-error').hidden=true;
+  $('staff-delete-confirm').disabled=false;
+  $('staff-delete-modal').showModal();
 }
 
 function renderServiceDurations(){
@@ -555,9 +660,9 @@ function renderServiceDurations(){
   for(const s of filtered){
     const row=node('div',undefined,'service-dur-row');
     row.append(node('span',`${s.category} · ${s.name}`));
-    const minI=document.createElement('input');minI.type='number';minI.min='5';minI.max='600';minI.placeholder='Min';minI.value=s.durationMinutes??'';
-    const maxI=document.createElement('input');maxI.type='number';maxI.min='5';maxI.max='600';maxI.placeholder='Max';maxI.value=s.durationMaxMinutes??'';
-    const btn=node('button','OK','tiny-btn');btn.type='button';
+    const minI=document.createElement('input');minI.type='number';minI.min='5';minI.max='600';minI.placeholder='Mín';minI.value=s.durationMinutes??'';
+    const maxI=document.createElement('input');maxI.type='number';maxI.min='5';maxI.max='600';maxI.placeholder='Máx';maxI.value=s.durationMaxMinutes??'';
+    const btn=node('button','Guardar','tiny-btn');btn.type='button';
     btn.addEventListener('click',async()=>{
       btn.disabled=true;
       try{
@@ -570,6 +675,74 @@ function renderServiceDurations(){
     row.append(minI,maxI,btn);list.append(row);
   }
 }
+
+$('staff-add-btn').addEventListener('click',()=>openStaffEditor(null));
+$('staff-edit-role').addEventListener('change',()=>{
+  const isRec=$('staff-edit-role').value==='reception';
+  $('staff-edit-holds').checked=!isRec;
+  $('staff-capabilities-section').hidden=isRec;
+});
+$('staff-edit-holds').addEventListener('change',()=>{$('staff-capabilities-section').hidden=!$('staff-edit-holds').checked;});
+$('staff-ovr-add').addEventListener('click',()=>{
+  const sid=$('staff-ovr-service').value,lvl=$('staff-ovr-level').value;
+  if(!sid)return;
+  editingOverrides=editingOverrides.filter(o=>o.serviceId!==sid);
+  editingOverrides.push({serviceId:sid,capabilityLevel:lvl});
+  renderStaffOverridesEditor();
+});
+for(const id of ['staff-editor-close','staff-editor-cancel'])$(id).addEventListener('click',()=>$('staff-editor-modal').close());
+$('staff-delete-cancel').addEventListener('click',()=>$('staff-delete-modal').close());
+
+$('staff-editor-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const btn=$('staff-editor-save');btn.disabled=true;$('staff-editor-error').hidden=true;
+  const id=$('staff-edit-id').value;
+  const canHold=$('staff-edit-holds').checked;
+  const categories=canHold?[...document.querySelectorAll('[data-staff-cat]')].filter(s=>s.value).map(s=>({category:s.dataset.staffCat,capabilityLevel:s.value})):[];
+  const serviceOverridesPayload=canHold?editingOverrides:[];
+  const profile={
+    displayName:$('staff-edit-name').value.trim(),
+    shortName:$('staff-edit-short').value.trim(),
+    role:$('staff-edit-role').value,
+    restWeekday:$('staff-edit-rest').value===''?null:Number($('staff-edit-rest').value),
+    canHoldAppointments:canHold,
+    specialtySummary:$('staff-edit-summary').value.trim()
+  };
+  try{
+    let shared=[];
+    if(id){
+      const r1=await api('/api/staff/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify(profile)});
+      shared=r1.sharedRestWith||[];
+      await api('/api/staff/'+encodeURIComponent(id)+'/capabilities',{method:'PUT',body:JSON.stringify({categories,serviceOverrides:serviceOverridesPayload})});
+    } else {
+      const r1=await api('/api/staff',{method:'POST',body:JSON.stringify({...profile,categories,serviceOverrides:serviceOverridesPayload})});
+      shared=r1.sharedRestWith||[];
+    }
+    $('staff-editor-modal').close();
+    await load();renderStaffModal();
+    $('staff-settings-status').textContent=shared.length
+      ?`Guardado. Aviso: comparte día de descanso con ${shared.join(', ')}.`
+      :(id?'Colaboradora y servicios actualizados.':'Nueva colaboradora agregada al equipo.');
+  }catch(err){
+    $('staff-editor-error').textContent=err.message;$('staff-editor-error').hidden=false;
+  }finally{
+    btn.disabled=false;
+  }
+});
+
+$('staff-delete-confirm').addEventListener('click',async()=>{
+  if(!pendingDeleteStaff)return;
+  const btn=$('staff-delete-confirm');btn.disabled=true;$('staff-delete-error').hidden=true;
+  try{
+    const res=await api('/api/staff/'+encodeURIComponent(pendingDeleteStaff.id),{method:'DELETE'});
+    $('staff-delete-modal').close();pendingDeleteStaff=null;
+    await load();renderStaffModal();
+    $('staff-settings-status').textContent=res.message||'Colaboradora retirada del equipo.';
+  }catch(err){
+    $('staff-delete-error').textContent=err.message;$('staff-delete-error').hidden=false;
+    btn.disabled=false;
+  }
+});
 
 /* Exceptions modal */
 function renderExceptionModal(){
@@ -603,7 +776,7 @@ $('exception-form').addEventListener('submit',async e=>{
     $('exception-feedback').hidden=false;
     $('exception-feedback').textContent=res.affectedAppointments?.length
       ?`Registrado. ⚠ Hay ${res.affectedAppointments.length} cita(s) programada(s) afectada(s) ese día: reprograma o reasigna.`
-      :'Excepción registrada sin conflictos con citas programadas.';
+      :'Cambio registrado sin afectar citas programadas.';
   }catch(err){$('exception-error').textContent=err.message;$('exception-error').hidden=false;}
   finally{b.disabled=false;}
 });
@@ -625,8 +798,8 @@ for(const btn of document.querySelectorAll('[data-agenda-filter]'))btn.addEventL
   render();
 });
 $('agenda-day-notes').addEventListener('input',()=>{noteDirty=true;$('agenda-note-status').textContent='Cambios sin guardar';});
-$('agenda-save-notes').addEventListener('click',async()=>{const b=$('agenda-save-notes'),savedDate=date,notes=$('agenda-day-notes').value;b.disabled=true;try{await api('/api/agenda/notes',{method:'PATCH',body:JSON.stringify({date:savedDate,notes})});if(date===savedDate&&$('agenda-day-notes').value===notes){noteDirty=false;$('agenda-note-status').textContent='Notas guardadas en Cloudflare.';}}catch(e){if(date===savedDate)$('agenda-note-status').textContent=e.message;}finally{b.disabled=false;}});
-$('agenda-hours-form').addEventListener('submit',async e=>{e.preventDefault();const b=$('agenda-save-hours');b.disabled=true;try{preferences=await api('/api/agenda/preferences',{method:'PATCH',body:JSON.stringify({openTime:$('agenda-open').value,closeTime:$('agenda-close').value,weekdays:[...document.querySelectorAll('[data-agenda-weekday]:checked')].map(x=>Number(x.value))})});message('Horario guardado. Se aplicará a las próximas citas.');$('agenda-hours-label').textContent=preferences.openTime+'–'+preferences.closeTime+' · America/Lima';}catch(e){message(e.message,true);}finally{b.disabled=false;}});
+$('agenda-save-notes').addEventListener('click',async()=>{const b=$('agenda-save-notes'),savedDate=date,notes=$('agenda-day-notes').value;b.disabled=true;try{await api('/api/agenda/notes',{method:'PATCH',body:JSON.stringify({date:savedDate,notes})});if(date===savedDate&&$('agenda-day-notes').value===notes){noteDirty=false;$('agenda-note-status').textContent='Notas guardadas.';}}catch(e){if(date===savedDate)$('agenda-note-status').textContent=e.message;}finally{b.disabled=false;}});
+$('agenda-hours-form').addEventListener('submit',async e=>{e.preventDefault();const b=$('agenda-save-hours');b.disabled=true;try{preferences=await api('/api/agenda/preferences',{method:'PATCH',body:JSON.stringify({openTime:$('agenda-open').value,closeTime:$('agenda-close').value,weekdays:[...document.querySelectorAll('[data-agenda-weekday]:checked')].map(x=>Number(x.value))})});message('Horario guardado. Se aplicará a las próximas citas.');const hoursTxt=`Horario del salón: ${preferences.openTime} a ${preferences.closeTime}`;$('agenda-hours-label').textContent=hoursTxt;if($('agenda-hours-readonly'))$('agenda-hours-readonly').textContent=hoursTxt;}catch(e){message(e.message,true);}finally{b.disabled=false;}});
 window.addEventListener('beforeunload',e=>{if(noteDirty){e.preventDefault();e.returnValue='';}});
 window.addEventListener('hashchange',()=>{if(location.hash==='#agenda')load();});
 if(location.hash==='#agenda')load();

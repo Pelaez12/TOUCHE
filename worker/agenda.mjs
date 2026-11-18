@@ -222,11 +222,110 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
     return response({saved:true,assigned:best});
   }
 
+  const VALID_ROLES=['stylist','junior_stylist_assistant','manicurist','reception'];
+  const VALID_TIERS=['senior','junior','support'];
+  const VALID_CAT_CAPS=['primary','junior','plan_b'];
+  const VALID_OVR_CAPS=['primary','junior','plan_b','disabled'];
+  const tierForRole=r=>r==='reception'?'support':r==='junior_stylist_assistant'?'junior':'senior';
+
   if(path==='/api/staff'&&method==='GET'){
     const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date());
     const start=today.slice(0,7)+'-01',next=new Date(start+'T12:00:00Z');next.setUTCMonth(next.getUTCMonth()+1);
     const ctx=await loadStaffContext(db,start,next.toISOString().slice(0,10),today);
     return response(ctx);
+  }
+
+  if(path==='/api/staff'&&method==='POST'){
+    if(!isAdmin)return response({error:'Solo Administración puede agregar colaboradoras.'},403);
+    let body;try{body=await readBody(request);}catch(e){return response({error:e.message},400);}
+    const displayName=String(body?.displayName||'').trim().replace(/\s+/g,' ');
+    if(displayName.length<2||displayName.length>100)return response({error:'Escribe un nombre completo de entre 2 y 100 caracteres.'},400);
+    const shortName=(String(body?.shortName||'').trim().replace(/\s+/g,' ')||displayName.split(/\s+/)[0]).slice(0,60);
+    const role=VALID_ROLES.includes(body?.role)?body.role:'stylist';
+    const seniorityTier=VALID_TIERS.includes(body?.seniorityTier)?body.seniorityTier:tierForRole(role);
+    const canHold=typeof body?.canHoldAppointments==='boolean'?(body.canHoldAppointments?1:0):(role==='reception'?0:1);
+    const restWeekday=body?.restWeekday===null||body?.restWeekday===''||body?.restWeekday===undefined?null:Number(body.restWeekday);
+    if(restWeekday!==null&&(!Number.isInteger(restWeekday)||restWeekday<0||restWeekday>6))return response({error:'Día de descanso no válido.'},400);
+    const specialty=String(body?.specialtySummary||'').trim().slice(0,400);
+
+    const catCaps=[];
+    if(Array.isArray(body?.categories)){
+      const seen=new Set();
+      for(const item of body.categories){
+        const cat=String(item?.category||'').trim();
+        const lvl=item?.capabilityLevel;
+        if(!cat||!VALID_CAT_CAPS.includes(lvl)||seen.has(cat))continue;
+        seen.add(cat);catCaps.push({category:cat,capabilityLevel:lvl});
+      }
+    }
+    const ovrCaps=[];
+    if(Array.isArray(body?.serviceOverrides)){
+      const seen=new Set();
+      for(const item of body.serviceOverrides){
+        const sid=String(item?.serviceId||'').trim();
+        const lvl=item?.capabilityLevel;
+        if(!sid||!VALID_OVR_CAPS.includes(lvl)||seen.has(sid))continue;
+        seen.add(sid);ovrCaps.push({serviceId:sid,capabilityLevel:lvl});
+      }
+    }
+    if(ovrCaps.length){
+      const existingSvcs=new Set((await db.prepare('SELECT id FROM services WHERE active=1').all()).results.map(r=>r.id));
+      if(ovrCaps.some(o=>!existingSvcs.has(o.serviceId)))return response({error:'Alguno de los servicios seleccionados ya no está activo.'},400);
+    }
+
+    const id='staff-'+crypto.randomUUID().slice(0,12);
+    const stmts=[
+      db.prepare('INSERT INTO staff(id,display_name,short_name,role,seniority_tier,can_hold_appointments,rest_weekday,specialty_summary,active) VALUES (?,?,?,?,?,?,?,?,1)')
+        .bind(id,displayName,shortName,role,seniorityTier,canHold,restWeekday,specialty)
+    ];
+    for(const c of catCaps)stmts.push(db.prepare('INSERT OR REPLACE INTO staff_category_capabilities(staff_id,category,capability_level) VALUES (?,?,?)').bind(id,c.category,c.capabilityLevel));
+    for(const o of ovrCaps)stmts.push(db.prepare('INSERT OR REPLACE INTO staff_service_overrides(staff_id,service_id,capability_level) VALUES (?,?,?)').bind(id,o.serviceId,o.capabilityLevel));
+    stmts.push(log(db,id,'create-staff',['displayName','shortName','role','canHoldAppointments','restWeekday','specialtySummary','capabilities']));
+    await db.batch(stmts);
+    const shared=restWeekday===null?[]:(await db.prepare('SELECT display_name AS displayName FROM staff WHERE active=1 AND id<>? AND rest_weekday=?').bind(id,restWeekday).all()).results.map(x=>x.displayName);
+    return response({id,saved:true,sharedRestWith:shared},201);
+  }
+
+  const staffCapMatch=path.match(/^\/api\/staff\/([a-zA-Z0-9-]+)\/capabilities$/);
+  if(staffCapMatch&&method==='PUT'){
+    if(!isAdmin)return response({error:'Solo Administración puede modificar los servicios que realiza el equipo.'},403);
+    const id=staffCapMatch[1];
+    const existing=await db.prepare('SELECT id FROM staff WHERE id=?').bind(id).first();
+    if(!existing)return response({error:'Colaboradora no encontrada.'},404);
+    let body;try{body=await readBody(request);}catch(e){return response({error:e.message},400);}
+    const catCaps=[];
+    if(Array.isArray(body?.categories)){
+      const seen=new Set();
+      for(const item of body.categories){
+        const cat=String(item?.category||'').trim();
+        const lvl=item?.capabilityLevel;
+        if(!cat||!VALID_CAT_CAPS.includes(lvl)||seen.has(cat))continue;
+        seen.add(cat);catCaps.push({category:cat,capabilityLevel:lvl});
+      }
+    }
+    const ovrCaps=[];
+    if(Array.isArray(body?.serviceOverrides)){
+      const seen=new Set();
+      for(const item of body.serviceOverrides){
+        const sid=String(item?.serviceId||'').trim();
+        const lvl=item?.capabilityLevel;
+        if(!sid||!VALID_OVR_CAPS.includes(lvl)||seen.has(sid))continue;
+        seen.add(sid);ovrCaps.push({serviceId:sid,capabilityLevel:lvl});
+      }
+    }
+    if(ovrCaps.length){
+      const existingSvcs=new Set((await db.prepare('SELECT id FROM services WHERE active=1').all()).results.map(r=>r.id));
+      if(ovrCaps.some(o=>!existingSvcs.has(o.serviceId)))return response({error:'Alguno de los servicios seleccionados no existe.'},400);
+    }
+    const stmts=[
+      db.prepare('DELETE FROM staff_category_capabilities WHERE staff_id=?').bind(id),
+      db.prepare('DELETE FROM staff_service_overrides WHERE staff_id=?').bind(id)
+    ];
+    for(const c of catCaps)stmts.push(db.prepare('INSERT INTO staff_category_capabilities(staff_id,category,capability_level) VALUES (?,?,?)').bind(id,c.category,c.capabilityLevel));
+    for(const o of ovrCaps)stmts.push(db.prepare('INSERT INTO staff_service_overrides(staff_id,service_id,capability_level) VALUES (?,?,?)').bind(id,o.serviceId,o.capabilityLevel));
+    stmts.push(log(db,id,'update-staff-capabilities',['categories','serviceOverrides']));
+    await db.batch(stmts);
+    return response({saved:true,staffId:id,categories:catCaps,serviceOverrides:ovrCaps});
   }
 
   const staffMatch=path.match(/^\/api\/staff\/([a-zA-Z0-9-]+)$/);
@@ -236,17 +335,62 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
     const existing=await db.prepare('SELECT * FROM staff WHERE id=?').bind(id).first();
     if(!existing)return response({error:'Colaboradora no encontrada.'},404);
     let body;try{body=await readBody(request);}catch(e){return response({error:e.message},400);}
-    const restWeekday=body.restWeekday===null||body.restWeekday===''?null:Number(body.restWeekday);
-    if(restWeekday!==null&&(!Number.isInteger(restWeekday)||restWeekday<0||restWeekday>6))return response({error:'Día de descanso inválido.'},400);
+    const displayName=Object.hasOwn(body,'displayName')?String(body.displayName||'').trim().replace(/\s+/g,' '):existing.display_name;
+    if(displayName.length<2||displayName.length>100)return response({error:'Escribe un nombre completo de entre 2 y 100 caracteres.'},400);
+    const shortName=Object.hasOwn(body,'shortName')&&String(body.shortName||'').trim()?String(body.shortName).trim().replace(/\s+/g,' ').slice(0,60):existing.short_name;
+    const role=Object.hasOwn(body,'role')?body.role:existing.role;
+    if(!VALID_ROLES.includes(role))return response({error:'Puesto no válido.'},400);
+    const seniorityTier=Object.hasOwn(body,'seniorityTier')?body.seniorityTier:(Object.hasOwn(body,'role')?tierForRole(role):existing.seniority_tier);
+    if(!VALID_TIERS.includes(seniorityTier))return response({error:'Nivel no válido.'},400);
+    const canHold=typeof body.canHoldAppointments==='boolean'?(body.canHoldAppointments?1:0):existing.can_hold_appointments;
+    const restWeekday=Object.hasOwn(body,'restWeekday')?(body.restWeekday===null||body.restWeekday===''?null:Number(body.restWeekday)):existing.rest_weekday;
+    if(restWeekday!==null&&(!Number.isInteger(restWeekday)||restWeekday<0||restWeekday>6))return response({error:'Día de descanso no válido.'},400);
     const specialty=typeof body.specialtySummary==='string'?body.specialtySummary.trim().slice(0,400):existing.specialty_summary;
-    const shortName=typeof body.shortName==='string'&&body.shortName.trim()?body.shortName.trim().slice(0,60):existing.short_name;
     const active=typeof body.active==='boolean'?(body.active?1:0):existing.active;
     await db.batch([
-      db.prepare('UPDATE staff SET short_name=?,rest_weekday=?,specialty_summary=?,active=? WHERE id=?').bind(shortName,restWeekday,specialty,active,id),
-      log(db,id,'update-staff',['shortName','restWeekday','specialtySummary','active'])
+      db.prepare('UPDATE staff SET display_name=?,short_name=?,role=?,seniority_tier=?,can_hold_appointments=?,rest_weekday=?,specialty_summary=?,active=? WHERE id=?')
+        .bind(displayName,shortName,role,seniorityTier,canHold,restWeekday,specialty,active,id),
+      log(db,id,'update-staff',['displayName','shortName','role','canHoldAppointments','restWeekday','specialtySummary','active'])
     ]);
-    const shared=restWeekday===null?[]:(await db.prepare('SELECT display_name AS displayName FROM staff WHERE active=1 AND id<>? AND rest_weekday=?').bind(id,restWeekday).all()).results.map(x=>x.displayName);
+    const shared=restWeekday===null||!active?[]:(await db.prepare('SELECT display_name AS displayName FROM staff WHERE active=1 AND id<>? AND rest_weekday=?').bind(id,restWeekday).all()).results.map(x=>x.displayName);
     return response({saved:true,sharedRestWith:shared});
+  }
+
+  if(staffMatch&&method==='DELETE'){
+    if(!isAdmin)return response({error:'Solo Administración puede retirar o eliminar colaboradoras.'},403);
+    const id=staffMatch[1];
+    const existing=await db.prepare('SELECT id,display_name AS displayName FROM staff WHERE id=?').bind(id).first();
+    if(!existing)return response({error:'Colaboradora no encontrada.'},404);
+    const [sched,histAppt,histTr,histFollow,linkedAcct]=await db.batch([
+      db.prepare("SELECT COUNT(*) AS c FROM appointments WHERE staff_id=? AND status='scheduled'").bind(id),
+      db.prepare('SELECT COUNT(*) AS c FROM appointments WHERE staff_id=?').bind(id),
+      db.prepare('SELECT COUNT(*) AS c FROM treatments WHERE staff_id=?').bind(id),
+      db.prepare('SELECT COUNT(*) AS c FROM client_followups WHERE assigned_to=?').bind(id),
+      db.prepare('SELECT COUNT(*) AS c FROM web_accounts WHERE staff_id=?').bind(id)
+    ]);
+    const scheduledCount=sched.results[0]?.c||0;
+    if(scheduledCount>0){
+      return response({error:`${existing.displayName} tiene ${scheduledCount} cita${scheduledCount===1?'':'s'} programada${scheduledCount===1?'':'s'}. Reasígnala${scheduledCount===1?'':'s'} o cancélala${scheduledCount===1?'':'s'} antes de retirarla.`},409);
+    }
+    const hasHistory=(histAppt.results[0]?.c||0)+(histTr.results[0]?.c||0)+(histFollow.results[0]?.c||0)+(linkedAcct.results[0]?.c||0)>0;
+    const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date());
+    if(hasHistory){
+      await db.batch([
+        db.prepare('UPDATE staff SET active=0 WHERE id=?').bind(id),
+        db.prepare('DELETE FROM staff_daily_shifts WHERE staff_id=? AND day>=?').bind(id,today),
+        log(db,id,'deactivate-staff',['active'])
+      ]);
+      return response({saved:true,archived:true,deleted:false,message:`${existing.displayName} fue retirada del equipo activo. Su historial de atenciones y cuenta se conservan.`});
+    }
+    await db.batch([
+      db.prepare('DELETE FROM staff_category_capabilities WHERE staff_id=?').bind(id),
+      db.prepare('DELETE FROM staff_service_overrides WHERE staff_id=?').bind(id),
+      db.prepare('DELETE FROM staff_schedule_exceptions WHERE staff_id=?').bind(id),
+      db.prepare('DELETE FROM staff_daily_shifts WHERE staff_id=?').bind(id),
+      db.prepare('DELETE FROM staff WHERE id=?').bind(id),
+      log(db,id,'delete-staff',[])
+    ]);
+    return response({saved:true,archived:false,deleted:true,message:`${existing.displayName} fue eliminada del equipo.`});
   }
 
   if(path==='/api/staff/exceptions'&&method==='POST'){

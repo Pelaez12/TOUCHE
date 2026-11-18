@@ -180,7 +180,7 @@ $('account-form')?.addEventListener('submit',async e=>{
   try{
     await api(id?'/api/accounts/'+encodeURIComponent(id):'/api/accounts',{method:id?'PATCH':'POST',body:JSON.stringify(payload)});
     $('account-modal').close();
-    toast(id?'Cuenta actualizada en Cloudflare.':'Cuenta de colaborador creada.');
+    toast(id?'Cuenta actualizada.':'Cuenta de colaborador creada.');
     await loadAccounts();
     if(store.user&&id===store.user.id){
       store.applyUser({...store.user,displayName:payload.displayName,email:payload.email});

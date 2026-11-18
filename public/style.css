@@ -97,3 +97,27 @@ body[data-role="admin"] .collab-only{display:none!important}
 .checkbox-inline input[type=checkbox]{width:16px;min-height:16px;margin:0}
 #accounts-page table{min-width:760px}
 @media(max-width:700px){.acct-actions{justify-content:flex-start}}
+
+/* Gestión completa de equipo y servicios por colaboradora */
+.staff-modal-wide{width:560px;max-width:100%}
+.staff-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px}
+.staff-modal-head .editor-subtitle{margin-bottom:0}
+.staff-card-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 13px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.staff-card-row.inactive{background:#faf8f6;opacity:.8}
+.staff-card-info{min-width:0;flex:1}
+.staff-card-info strong{display:block;font-size:12px;font-weight:600}
+.staff-card-info small{display:block;font-size:10px;color:var(--muted);margin-top:3px;line-height:1.5}
+.staff-services-pill{color:#6f5249!important;background:#faf3ee;padding:4px 8px;border-radius:5px;margin-top:6px!important}
+.staff-card-actions{display:flex;gap:6px;flex-wrap:wrap;flex:none}
+.danger-outline{color:#9a443c;border-color:#e5c8c2}
+.danger-outline:hover{background:#fbefec}
+.staff-cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 18px}
+.staff-cat-item{display:flex;flex-direction:column;gap:5px;margin:0!important;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:#fcfbfa}
+.staff-cat-item span{font-size:10px;font-weight:600;color:var(--ink)}
+.staff-cat-item select{min-height:33px;font-size:11px;padding:5px 8px}
+.staff-ovr-list{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 12px}
+.ovr-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid #e2d4ca;background:#faf4ef;border-radius:6px;font-size:10px}
+.ovr-chip .tiny-btn{min-height:22px;padding:2px 6px}
+.staff-ovr-add-row{display:grid;grid-template-columns:1fr 145px auto;gap:8px;align-items:center;margin-bottom:14px}
+.staff-ovr-add-row select{min-height:34px;font-size:11px;padding:5px 8px}
+@media(max-width:600px){.staff-modal-head{flex-direction:column}.staff-card-row{flex-direction:column}.staff-cat-grid{grid-template-columns:1fr}.staff-ovr-add-row{grid-template-columns:1fr}}

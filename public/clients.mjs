@@ -14,15 +14,15 @@ let clients=[],directoryStatus='active',page=1,pendingDelete=null,toastTimer;
 const pageSize=15;
 async function api(path,options={}){
   const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...options.headers}});
-  let body;try{body=await response.json();}catch{throw Error('El servidor no devolvió una respuesta válida.');}
+  let body;try{body=await response.json();}catch{throw Error('No se pudo completar la operación. Inténtalo de nuevo.');}
   if(!response.ok)throw Error(body.error||'No se pudo completar la operación.');return body;
 }
 function notify(message){clearTimeout(toastTimer);$('toast-text').textContent=message;$('toast').hidden=false;toastTimer=setTimeout(()=>$('toast').hidden=true,5500);}
 function showError(error){$('clients-error').textContent=error.message;$('clients-error').hidden=false;}
 async function refreshClients(){
   const result=await api('/api/clients');clients=result.clients;
-  $('connection-status').className='connection-status connected';$('connection-status').lastElementChild.textContent='Cloudflare conectado';
-  $('footer-source').textContent='Guardado en Cloudflare D1 · America/Lima';$('clients-error').hidden=true;
+  $('connection-status').className='connection-status connected';$('connection-status').lastElementChild.textContent='En línea';
+  $('footer-source').textContent='Touché Hair Studio · Horario de Perú';$('clients-error').hidden=true;
   const active=clients.filter(c=>!c.archivedAt).length,archived=clients.length-active;
   const contactable=clients.filter(c=>!c.archivedAt&&whatsappPhone(c.phone)).length;
   $('nav-client-count').textContent=active;$('active-count').textContent=contactable;$('missing-count').textContent=active-contactable;$('all-count').textContent=active;$('archived-count').textContent=archived;
@@ -95,7 +95,7 @@ async function afterMutation(){
 $('client-form').addEventListener('submit',async event=>{
   event.preventDefault();const button=$('save-client');if(button.disabled)return;button.disabled=true;button.textContent='Guardando…';$('editor-error').hidden=true;
   const id=$('edit-id').value,body={name:$('edit-name').value,dni:$('edit-dni').value,phone:$('edit-phone').value,birthday:$('edit-birthday').value,notes:$('edit-notes').value};
-  try{const result=await api(id?'/api/clients/'+encodeURIComponent(id):'/api/clients',{method:id?'PATCH':'POST',body:JSON.stringify(body)});savedEditorClient={...body,id:result.id||id};$('client-editor').close();notify(id?'Cambios guardados en Cloudflare.':'Clienta creada y guardada en Cloudflare.');await afterMutation();}
+  try{const result=await api(id?'/api/clients/'+encodeURIComponent(id):'/api/clients',{method:id?'PATCH':'POST',body:JSON.stringify(body)});savedEditorClient={...body,id:result.id||id};$('client-editor').close();notify(id?'Cambios guardados.':'Clienta guardada.');await afterMutation();}
   catch(error){$('editor-error').textContent=error.message;$('editor-error').hidden=false;}
   finally{button.disabled=false;button.textContent=id?'Guardar cambios':'Guardar clienta';}
 });
@@ -153,11 +153,10 @@ async function ensureClients(force=false){
   if(!force&&clientsLoaded&&!clientsDirty)return;
   if(!force&&activePage()!=='clients')return;
   try{await refreshClients();clientsLoaded=true;clientsDirty=false;store.clients=clients.filter(c=>!c.archivedAt);}
-  catch(error){showError(error);$('connection-status').className='connection-status offline';$('connection-status').lastElementChild.textContent='Sin conexión';$('directory-count').textContent='Directorio no disponible';$('client-pagination-label').textContent='Conecta el servidor para cargar las fichas.';}
+  catch(error){showError(error);$('connection-status').className='connection-status offline';$('connection-status').lastElementChild.textContent='Sin internet';$('directory-count').textContent='Directorio no disponible';$('client-pagination-label').textContent='Revisa tu conexión y recarga la página.';}
 }
 $('global-search').addEventListener('focus',()=>{if(!clientsLoaded)ensureClients(true);});
-window.addEventListener('hashchange',()=>{if(activePage()==='clients')window.addEventListener('touche:session-ready',()=>{navigate();if(clientsLoaded)renderDirectory();});
-ensureSession().then(()=>{navigate();ensureClients();});});
+window.addEventListener('hashchange',()=>{if(activePage()==='clients')ensureClients();});
 window.addEventListener('touche:edit-client',async event=>{if(!clientsLoaded)await ensureClients(true);const client=clients.find(c=>c.id===event.detail?.id);if(client){location.hash='#clientas';openEditor(client);}else notify('Recarga el directorio para abrir esta ficha.');});
 window.addEventListener('touche:data-changed',()=>{clientsDirty=true;if(activePage()==='clients')ensureClients(true);});
 window.addEventListener('touche:agenda-bootstrapped',event=>{
@@ -165,8 +164,8 @@ window.addEventListener('touche:agenda-bootstrapped',event=>{
   if(typeof count==='number'){
     $('nav-client-count').textContent=count;
     $('connection-status').className='connection-status connected';
-    $('connection-status').lastElementChild.textContent='Cloudflare conectado';
-    $('footer-source').textContent='Guardado en Cloudflare D1 · America/Lima';
+    $('connection-status').lastElementChild.textContent='En línea';
+    $('footer-source').textContent='Touché Hair Studio · Horario de Perú';
   }
 });
 window.addEventListener('touche:session-ready',()=>{navigate();if(clientsLoaded)renderDirectory();});

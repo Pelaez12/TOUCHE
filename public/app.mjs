@@ -110,7 +110,7 @@ $('export').addEventListener('click',()=>{
 });
 async function loadHistory(){
 try {
-  const response=await fetch('/api/history');if(!response.ok)throw Error('No se pudo cargar el historial. Verifica la importación local.');
+  const response=await fetch('/api/history');if(!response.ok)throw Error('No se pudo cargar el historial. Recarga la página e inténtalo de nuevo.');
   data=await response.json();
   const selectedCategory=$('category').value;
   $('category').replaceChildren(new Option('Todos los servicios iniciales',''));
@@ -118,17 +118,17 @@ try {
   for(const category of categories){const o=document.createElement('option');o.value=category;o.textContent=category;$('category').append(o);}
   $('category').value=categories.includes(selectedCategory)?selectedCategory:'';
   const latest=data.events.map(e=>e.date).sort().at(-1);
-  if(!latest)throw Error('No hay fechas utilizables. Revisa las incidencias del Excel antes de calcular.');
+  if(!latest)throw Error('Aún no hay fechas registradas para calcular el retorno.');
   const d=new Date(latest+'T12:00:00Z'),year=d.getUTCFullYear(),month=d.getUTCMonth();
   const iso=(y,m,day)=>new Date(Date.UTC(y,m,day,12)).toISOString().slice(0,10);
   // Latest month is a partial observation window; the cutoff is explicit.
   if(!$('start').value){$('start').value=iso(year,month-1,1);$('end').value=iso(year,month,0);
   $('returnStart').value=iso(year,month,1);$('returnEnd').value=latest;}
   for(const id of ['start','end','returnStart','returnEnd'])$(id).max=data.asOf;
-  $('cutoff').textContent=`Corte de importación: ${fmt(data.asOf)} · Última fecha utilizable: ${fmt(latest)} · El período más reciente puede estar incompleto.`;
-  $('quality-count').textContent=`${data.issues.length} registros por revisar`;
+  $('cutoff').textContent=`Historial actualizado al ${fmt(data.asOf)} · Última atención registrada: ${fmt(latest)}.`;
+  $('quality-count').textContent=`${data.issues.length} casos por revisar`;
   const uniqueVisits=new Set(data.events.map(e=>e.clientId+'|'+e.date)).size;
-  $('coverage').textContent=`${data.clients.length} identidades provisionales · ${data.events.length} registros de atención · ${uniqueVisits} visitas por nombre y día. El historial se revisó para 2025–2026; los casos ambiguos siguen pendientes.`;
+  $('coverage').textContent=`${data.clients.length} clientas activas · ${data.events.length} atenciones registradas · ${uniqueVisits} visitas.`;
   renderIssues();renderHistory();renderCorrections();compute();
 } catch(error) {$('error').hidden=false;$('error').textContent=error.message;$('cutoff').textContent='Historial no disponible.';$('result-count').textContent='Sin datos para calcular.';}
 }
@@ -159,7 +159,7 @@ $('message-body').addEventListener('input',updateMessageLink);
 for(const id of ['close-message','cancel-message'])$(id).addEventListener('click',()=>$('message-dialog').close());
 $('open-whatsapp').addEventListener('click',event=>{if(!$('open-whatsapp').hasAttribute('href'))event.preventDefault();});
 async function loadMessagePreferences(){
-  try{const response=await fetch('/api/message-preferences');if(!response.ok)throw Error('No se pudo cargar la plantilla guardada. Puedes preparar mensajes con el texto inicial.');messagePreferences=await response.json();$('message-template').value=messagePreferences.template;$('message-promotion').value=messagePreferences.promotion;$('message-template').disabled=false;$('message-promotion').disabled=false;$('save-message-template').disabled=false;$('message-settings-status').textContent='Plantilla guardada en Cloudflare. No se envían mensajes desde este sistema.';}
+  try{const response=await fetch('/api/message-preferences');if(!response.ok)throw Error('No se pudo cargar la plantilla guardada. Puedes preparar mensajes con el texto inicial.');messagePreferences=await response.json();$('message-template').value=messagePreferences.template;$('message-promotion').value=messagePreferences.promotion;$('message-template').disabled=false;$('message-promotion').disabled=false;$('save-message-template').disabled=false;$('message-settings-status').textContent='Plantilla guardada. Los mensajes solo se envían cuando pulsas Enviar en WhatsApp.';}
   catch(error){$('message-settings-status').textContent=error.message;}
 }
 $('save-message-template').addEventListener('click',async()=>{
