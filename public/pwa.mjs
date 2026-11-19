@@ -169,9 +169,10 @@ function processSalonNotifications(data){
         const dayLbl=formatApptDay(a.startsAt.slice(0,10),todayStr);
         const time=a.startsAt.slice(11,16);
         const who=a.staffName?` · Atiende: ${a.staffName}`:'';
-        const body=`${dayLbl} ${time} · ${a.clientName} — ${a.serviceName}${who}`;
-        sendNativeNotification('Nueva cita en el salón · Touché',body,'touche-salon-new-'+a.id);
-        showToast(`Nueva cita: ${a.clientName} (${dayLbl} ${time}${who})`);
+        const title=`Nueva cita: ${a.clientName} · ${a.serviceName}`;
+        const body=`${dayLbl} a las ${time}${who}`;
+        sendNativeNotification(title,body,'touche-salon-new-'+a.id);
+        showToast(`${title} (${dayLbl} ${time}${who})`);
       }
     }
   }
@@ -187,7 +188,10 @@ function processSalonNotifications(data){
       if(!sessionStorage.getItem(key)){
         sessionStorage.setItem(key,'1');
         const who=a.staffName?` · Atiende: ${a.staffName}`:'';
-        sendNativeNotification(`Clienta llega en ${diffMin} min · Touché`,`${a.startsAt.slice(11,16)} · ${a.clientName} (${a.serviceName})${who}`,'touche-salon-soon-'+a.id);
+        const title=`En ${diffMin} min: ${a.clientName} · ${a.serviceName}`;
+        const body=`Hoy a las ${a.startsAt.slice(11,16)}${who}`;
+        sendNativeNotification(title,body,'touche-salon-soon-'+a.id);
+        showToast(`${title} (${a.startsAt.slice(11,16)}${who})`);
       }
     }
   }
@@ -214,8 +218,9 @@ function handleAdminAlerts(detail){
     seenAdminAlertIds.add(al.id);
     if(adminAlertsPrimed||!sessionStorage.getItem('touche_alert_notified_'+al.id)){
       sessionStorage.setItem('touche_alert_notified_'+al.id,'1');
-      sendNativeNotification(al.title||'ALERTA: No llegó el cliente — Recordarle',al.message||'Revisa la agenda de Administración.','touche-alert-'+al.id);
-      showToast(`${al.title}: ${al.clientName||'Revisar agenda'}`);
+      const whoSvc=[al.clientName,al.serviceName].filter(Boolean).join(' · ');
+      sendNativeNotification(al.title||'ALERTA: No llegó el cliente — Recordarle',al.message||whoSvc||'Revisa la agenda de Administración.','touche-alert-'+al.id);
+      showToast(`${al.title}${whoSvc?`: ${whoSvc}`:''}`);
     }
   }
   adminAlertsPrimed=true;
