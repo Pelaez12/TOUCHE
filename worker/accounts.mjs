@@ -9,7 +9,110 @@ function accountAudit(db,actorEmail,entityId,action,fields){
 
 export async function handleAccounts(request,db,readBody,actor,currentSessionHash=null){
   const url=new URL(request.url),path=url.pathname,method=request.method;
-  if(!path.startsWith('/api/accounts'))return null;
+  if(!path.startsWith('/api/accounts')&&path!=='/api/profile')return null;
+
+  if(path==='/api/profile'){
+    if(!actor?.accountId)return response({error:'Inicia sesión para ver tu perfil.'},401);
+    const account=await db.prepare('SELECT id,email,display_name AS displayName,role,staff_id AS staffId,active FROM web_accounts WHERE id=?').bind(actor.accountId).first();
+    if(!account||!account.active)return response({error:'Tu cuenta no está activa.'},403);
+    const staffMember=account.staffId
+      ? await db.prepare('SELECT id,display_name AS displayName,short_name AS shortName,role,seniority_tier AS seniorityTier,can_hold_appointments AS canHoldAppointments,rest_weekday AS restWeekday,specialty_summary AS specialtySummary,active FROM staff WHERE id=?').bind(account.staffId).first()
+      : null;
+
+    if(method==='GET'){
+      const [catCountRes,svcRes,myCatsRes,myOvrsRes]=await db.batch([
+        db.prepare('SELECT category,COUNT(*) AS count FROM services WHERE active=1 GROUP BY category ORDER BY category COLLATE NOCASE'),
+        db.prepare('SELECT id,name,category,duration_minutes AS durationMinutes,duration_max_minutes AS durationMaxMinutes FROM services WHERE active=1 ORDER BY category COLLATE NOCASE,name COLLATE NOCASE'),
+        staffMember ? db.prepare('SELECT category,capability_level AS capabilityLevel FROM staff_category_capabilities WHERE staff_id=? ORDER BY category COLLATE NOCASE').bind(staffMember.id) : db.prepare('SELECT 1 WHERE 0'),
+        staffMember ? db.prepare('SELECT service_id AS serviceId,capability_level AS capabilityLevel FROM staff_service_overrides WHERE staff_id=?').bind(staffMember.id) : db.prepare('SELECT 1 WHERE 0')
+      ]);
+      return response({
+        account:{id:account.id,email:account.email,displayName:account.displayName,role:account.role,staffId:account.staffId},
+        staff:staffMember?{...staffMember,active:!!staffMember.active,canHoldAppointments:!!staffMember.canHoldAppointments}:null,
+        categories:myCatsRes.results,
+        serviceOverrides:myOvrsRes.results,
+        catalog:{
+          categories:catCountRes.results,
+          services:svcRes.results
+        }
+      });
+    }
+
+    if(method==='PATCH'){
+      let body;try{body=await readBody(request);}catch(e){return response({error:e.message},400);}
+      const displayName=Object.hasOwn(body,'displayName')
+        ? String(body.displayName||'').trim().replace(/\s+/g,' ')
+        : account.displayName;
+      if(displayName.length<2||displayName.length>100)return response({error:'Escribe tu nombre completo (entre 2 y 100 caracteres).'},400);
+
+      const now=new Date().toISOString();
+      const stmts=[
+        db.prepare('UPDATE web_accounts SET display_name=?,updated_at=? WHERE id=?').bind(displayName,now,account.id)
+      ];
+      const fields=['displayName'];
+
+      if(staffMember){
+        const shortName=Object.hasOwn(body,'shortName')&&String(body.shortName||'').trim()
+          ? String(body.shortName).trim().replace(/\s+/g,' ').slice(0,60)
+          : (staffMember.shortName||displayName.split(/\s+/)[0]).slice(0,60);
+        const specialtySummary=Object.hasOwn(body,'specialtySummary')
+          ? String(body.specialtySummary||'').trim().slice(0,400)
+          : (staffMember.specialtySummary||'');
+        stmts.push(
+          db.prepare('UPDATE staff SET display_name=?,short_name=?,specialty_summary=? WHERE id=?')
+            .bind(displayName,shortName,specialtySummary,staffMember.id)
+        );
+        fields.push('shortName','specialtySummary');
+
+        if(staffMember.canHoldAppointments&&(Object.hasOwn(body,'categories')||Object.hasOwn(body,'serviceOverrides'))){
+          const VALID_CAT_CAPS=['primary','junior','plan_b'];
+          const VALID_OVR_CAPS=['primary','junior','plan_b','disabled'];
+          const defaultLvl=staffMember.seniorityTier==='junior'?'junior':'primary';
+          const [validCatRows,validSvcRows]=await db.batch([
+            db.prepare('SELECT DISTINCT category FROM services WHERE active=1'),
+            db.prepare('SELECT id FROM services WHERE active=1')
+          ]);
+          const validCats=new Set(validCatRows.results.map(r=>r.category));
+          const validSvcs=new Set(validSvcRows.results.map(r=>r.id));
+
+          const catCaps=[];
+          if(Array.isArray(body.categories)){
+            const seen=new Set();
+            for(const item of body.categories){
+              const cat=String(item?.category||'').trim();
+              const lvl=VALID_CAT_CAPS.includes(item?.capabilityLevel)?item.capabilityLevel:defaultLvl;
+              if(!cat||seen.has(cat))continue;
+              if(!validCats.has(cat))return response({error:'Solo puedes elegir categorías registradas en el catálogo del salón.'},400);
+              seen.add(cat);catCaps.push({category:cat,capabilityLevel:lvl});
+            }
+          }
+          const ovrCaps=[];
+          if(Array.isArray(body.serviceOverrides)){
+            const seen=new Set();
+            for(const item of body.serviceOverrides){
+              const sid=String(item?.serviceId||'').trim();
+              const lvl=VALID_OVR_CAPS.includes(item?.capabilityLevel)?item.capabilityLevel:defaultLvl;
+              if(!sid||seen.has(sid))continue;
+              if(!validSvcs.has(sid))return response({error:'Solo puedes elegir servicios registrados en el catálogo del salón.'},400);
+              seen.add(sid);ovrCaps.push({serviceId:sid,capabilityLevel:lvl});
+            }
+          }
+          stmts.push(
+            db.prepare('DELETE FROM staff_category_capabilities WHERE staff_id=?').bind(staffMember.id),
+            db.prepare('DELETE FROM staff_service_overrides WHERE staff_id=?').bind(staffMember.id)
+          );
+          for(const c of catCaps)stmts.push(db.prepare('INSERT INTO staff_category_capabilities(staff_id,category,capability_level) VALUES (?,?,?)').bind(staffMember.id,c.category,c.capabilityLevel));
+          for(const o of ovrCaps)stmts.push(db.prepare('INSERT INTO staff_service_overrides(staff_id,service_id,capability_level) VALUES (?,?,?)').bind(staffMember.id,o.serviceId,o.capabilityLevel));
+          fields.push('categories','serviceOverrides');
+        }
+      }
+
+      stmts.push(accountAudit(db,actor.email,account.id,'update-own-profile',fields));
+      await db.batch(stmts);
+      return response({saved:true,displayName});
+    }
+    return response({error:'Método no permitido.'},405);
+  }
 
   if(path==='/api/accounts/me/password'&&method==='POST'){
     if(!actor?.accountId)return response({error:'Inicia sesión con una cuenta interna para cambiar tu contraseña.'},400);

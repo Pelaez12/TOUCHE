@@ -11,11 +11,19 @@ export {hashText};
 export function sameOrigin(request){return request.headers.get('origin')===new URL(request.url).origin&&request.headers.get('sec-fetch-site')!=='cross-site';}
 function rawSession(request){const value=(request.headers.get('cookie')||'').split(';').map(s=>s.trim()).find(s=>s.startsWith(cookieName+'='))?.slice(cookieName.length+1);return value&&/^[0-9a-f]{64}$/.test(value)?value:null;}
 
+function accessScopeOf(role,staffRole){
+  if(role==='admin')return 'admin';
+  if(staffRole==='reception')return 'reception';
+  return 'stylist';
+}
+
 async function session(request,db){
   const token=rawSession(request);
   if(!token||!db)return null;
   const hash=await hashText(token);
-  return await db.prepare(`SELECT s.token_hash,a.id AS accountId,a.email,a.display_name AS displayName,a.role,a.staff_id AS staffId FROM web_sessions s JOIN web_accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.expires_at>? AND a.active=1 AND a.password_hash IS NOT NULL`).bind(hash,Math.floor(Date.now()/1000)).first();
+  const row=await db.prepare(`SELECT s.token_hash,a.id AS accountId,a.email,a.display_name AS displayName,a.role,a.staff_id AS staffId,st.role AS staffRole FROM web_sessions s JOIN web_accounts a ON a.id=s.account_id LEFT JOIN staff st ON st.id=a.staff_id WHERE s.token_hash=? AND s.expires_at>? AND a.active=1 AND a.password_hash IS NOT NULL`).bind(hash,Math.floor(Date.now()/1000)).first();
+  if(!row)return null;
+  return {...row,accessScope:accessScopeOf(row.role,row.staffRole)};
 }
 
 function etagMatches(header,etag){
@@ -57,7 +65,7 @@ export async function handleWeb(request,env,readBody,bearerAuthorized=null){
     const limit=await env.DB.prepare('INSERT INTO web_login_limits(principal_hash,window_start,attempts) VALUES (?,?,1) ON CONFLICT(principal_hash) DO UPDATE SET attempts=CASE WHEN window_start<? THEN 1 ELSE attempts+1 END,window_start=CASE WHEN window_start<? THEN excluded.window_start ELSE window_start END RETURNING attempts').bind(principal,now,now-900,now-900).first();
     if(limit.attempts>10)return {response:json({error:'Demasiados intentos. Vuelve a intentarlo en 15 minutos.'},429,{'Retry-After':'900'})};
 
-    const account=await env.DB.prepare('SELECT id,email,display_name AS displayName,role,staff_id AS staffId,password_hash AS passwordHash,salt,active FROM web_accounts WHERE lower(email)=?').bind(email).first();
+    const account=await env.DB.prepare('SELECT a.id,a.email,a.display_name AS displayName,a.role,a.staff_id AS staffId,a.password_hash AS passwordHash,a.salt,a.active,st.role AS staffRole FROM web_accounts a LEFT JOIN staff st ON st.id=a.staff_id WHERE lower(a.email)=?').bind(email).first();
     const ok=account?.passwordHash&&await verifyPassword(rawPass,account.passwordHash,account.salt);
     if(!ok)return {response:json({error:'Correo interno o contraseña incorrectos, o cuenta pendiente de activación.'},401)};
     if(!account.active)return {response:json({error:'Esta cuenta está desactivada por Administración.'},403)};
@@ -70,7 +78,7 @@ export async function handleWeb(request,env,readBody,bearerAuthorized=null){
       env.DB.prepare('UPDATE web_accounts SET last_login_at=?,updated_at=? WHERE id=?').bind(nowIso,nowIso,account.id),
       env.DB.prepare('INSERT INTO audit_log(id,actor,action,entity_type,entity_id,changes_json) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(),account.email,'login','account',account.id,JSON.stringify({role:account.role}))
     ]);
-    const user={id:account.id,email:account.email,displayName:account.displayName,role:account.role,staffId:account.staffId};
+    const user={id:account.id,email:account.email,displayName:account.displayName,role:account.role,staffId:account.staffId,staffRole:account.staffRole||null,accessScope:accessScopeOf(account.role,account.staffRole)};
     return {response:json({signedIn:true,user},200,{'Set-Cookie':cookieName+'='+token+'; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=86400'})};
   }
 
@@ -88,10 +96,10 @@ export async function handleWeb(request,env,readBody,bearerAuthorized=null){
 
   if(path==='/api/session'){
     if(current){
-      return {response:json({authenticated:true,user:{id:current.accountId,email:current.email,displayName:current.displayName,role:current.role,staffId:current.staffId}})};
+      return {response:json({authenticated:true,user:{id:current.accountId,email:current.email,displayName:current.displayName,role:current.role,staffId:current.staffId,staffRole:current.staffRole||null,accessScope:current.accessScope}})};
     }
     if(bearerAuthorized&&await bearerAuthorized()){
-      return {response:json({authenticated:true,user:{id:'acct-admin',email:'admin@touche.pe',displayName:'Administración Touché',role:'admin',staffId:null,localProxy:true}})};
+      return {response:json({authenticated:true,user:{id:'acct-admin',email:'admin@touche.pe',displayName:'Administración Touché',role:'admin',staffId:null,staffRole:null,accessScope:'admin',localProxy:true}})};
     }
     return {response:json({authenticated:false},401)};
   }
@@ -100,7 +108,7 @@ export async function handleWeb(request,env,readBody,bearerAuthorized=null){
     return {
       authenticated:!!current,
       sessionHash:current?.token_hash||null,
-      actor:current?{accountId:current.accountId,email:current.email,displayName:current.displayName,role:current.role,staffId:current.staffId}:null
+      actor:current?{accountId:current.accountId,email:current.email,displayName:current.displayName,role:current.role,staffId:current.staffId,staffRole:current.staffRole||null,accessScope:current.accessScope}:null
     };
   }
   if(request.method!=='GET'&&request.method!=='HEAD')return {response:new Response('Método no permitido',{status:405,headers:security})};

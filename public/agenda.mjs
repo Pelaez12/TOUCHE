@@ -13,7 +13,7 @@ const CAP_RANK={primary:1,junior:2,plan_b:3};
 const CONFIRM_LABELS={unconfirmed:'Sin confirmar',reminded_day_before:'Recordada (día antes)',reminded_same_day:'Recordada (hoy)',confirmed:'Confirmada',rescheduled:'Reprogramada'};
 
 let date=today(),month=date.slice(0,7),appointments=[],clients=[],services=[],preferences=null;
-let staff=[],categoryCaps=[],serviceOverrides=[],exceptions=[],dailyShifts=[];
+let staff=[],categoryCaps=[],serviceOverrides=[],exceptions=[],dailyShifts=[],adminAlerts=[];
 let activeFilter='all',agendaScope='all',scopeInitialized=false,noteDirty=false,loading=false,loadId=0,bootstrapped=false,editingAppointment=null;
 
 function getMyStaff(){
@@ -24,7 +24,7 @@ function getMyStaff(){
 function initScopeIfNeeded(){
   if(scopeInitialized||!store.user||!staff.length)return;
   const me=getMyStaff();
-  agendaScope=!store.isAdmin()&&me&&me.canHoldAppointments?'mine':'all';
+  agendaScope=store.isStylist()?'mine':(!store.isAdmin()&&me&&me.canHoldAppointments?'mine':'all');
   scopeInitialized=true;
   syncScopeUI();
 }
@@ -37,15 +37,102 @@ function syncScopeUI(){
   }
 }
 
+async function saveMyOwnArrival(){
+  try{
+    const res=await api('/api/agenda/my-arrival',{method:'POST',body:JSON.stringify({day:date})});
+    if(res.shift){
+      dailyShifts=dailyShifts.filter(s=>s.staffId!==res.shift.staffId);
+      dailyShifts.push(res.shift);
+    }
+    renderMyBanner();
+    message('Tu llegada quedó registrada.');
+  }catch(e){message(e.message,true);}
+}
+
+function renderAdminAlerts(){
+  const btn=$('admin-alerts-btn'),cnt=$('admin-alerts-count'),panel=$('admin-alerts-panel');
+  if(!store.isAdmin()){
+    if(btn)btn.hidden=true;
+    if(panel){panel.hidden=true;panel.replaceChildren();}
+    return;
+  }
+  const unread=adminAlerts.filter(a=>a.status==='unread');
+  if(btn&&cnt){
+    btn.hidden=unread.length===0;
+    cnt.textContent=String(unread.length);
+  }
+  if(!panel)return;
+  panel.replaceChildren();
+  panel.hidden=unread.length===0;
+  if(!unread.length)return;
+
+  const head=node('div',undefined,'admin-alerts-head');
+  head.append(node('strong',`Alertas pendientes de atención (${unread.length})`),node('small','Solo visibles para Administración'));
+  panel.append(head);
+
+  for(const al of unread){
+    const item=node('article',undefined,'admin-alert-card');
+    const info=node('div',undefined,'admin-alert-info');
+    info.append(node('strong',al.title),node('p',al.message));
+    const when=al.createdAt?new Intl.DateTimeFormat('es-PE',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short',timeZone:'America/Lima'}).format(new Date(al.createdAt)):'';
+    info.append(node('small',`Reportado por ${al.createdByName||al.createdByEmail}${when?' · '+when:''}`));
+    const acts=node('div',undefined,'admin-alert-actions');
+    if(whatsappPhone(al.clientPhone)){
+      const wa=node('button','Recordar por WhatsApp','tiny-btn message-button');wa.type='button';
+      wa.addEventListener('click',()=>{
+        const first=String(al.clientName||'').trim().split(/\s+/)[0]||'hola';
+        const name=first===first.toUpperCase()?first.toLocaleLowerCase('es').replace(/^./,x=>x.toLocaleUpperCase('es')):first;
+        const time=al.startsAt?al.startsAt.slice(11,16):'';
+        const msg=`Hola, ${name}. Te saludamos de Touché Hair Studio. Te recordamos tu cita de ${(al.serviceName||'tu servicio').toLocaleLowerCase('es')}${time?' a las '+time:''}${al.staffName?' con '+al.staffName:''}. ¿Vienes en camino o necesitas reprogramarla?`;
+        window.open(whatsappLink(al.clientPhone,msg),'_blank','noopener,noreferrer');
+      });
+      acts.append(wa);
+    }
+    const done=node('button','Marcar atendida','tiny-btn primary');done.type='button';
+    done.addEventListener('click',async()=>{
+      done.disabled=true;
+      try{
+        await api('/api/alerts/'+encodeURIComponent(al.id)+'/resolve',{method:'POST',body:'{}'});
+        adminAlerts=adminAlerts.filter(x=>x.id!==al.id);
+        renderAdminAlerts();
+      }catch(e){message(e.message,true);done.disabled=false;}
+    });
+    acts.append(done);
+    item.append(info,acts);
+    panel.append(item);
+  }
+}
+
+async function loadAdminAlerts(){
+  if(!store.isAdmin())return;
+  try{
+    const data=await api('/api/alerts?status=unread');
+    adminAlerts=data.alerts||[];
+    renderAdminAlerts();
+    window.dispatchEvent(new CustomEvent('touche:admin-alerts',{detail:{alerts:adminAlerts}}));
+  }catch{}
+}
+
 function renderMyBanner(){
   const banner=$('agenda-my-banner');
   const sw=$('agenda-view-switch');
   if(!banner||!sw)return;
+  const isStylist=store.isStylist();
+  if($('agenda-title'))$('agenda-title').textContent=isStylist?'Mi agenda':'Agenda del salón';
+  if($('agenda-subtitle'))$('agenda-subtitle').textContent=isStylist
+    ?'Tus citas asignadas del día. Marca cuando llegue tu clienta o avisa a Administración si no llegó.'
+    :'Horarios del equipo, turnos por orden de llegada y confirmaciones por WhatsApp.';
+  if($('agenda-empty-text'))$('agenda-empty-text').textContent=isStylist
+    ?'No tienes citas programadas para este día.'
+    :'Agenda una clienta para organizar sus servicios, tiempos y especialista.';
+
   const me=getMyStaff();
   if(!me){banner.hidden=true;sw.hidden=true;return;}
   banner.replaceChildren();
   if(me.canHoldAppointments){
-    sw.hidden=false;syncScopeUI();
+    sw.hidden=isStylist;
+    if(isStylist)agendaScope='mine';
+    syncScopeUI();
     const st=staffDayStatus(me,date);
     const sh=dailyShifts.find(s=>s.staffId===me.id);
     const myCount=appointments.filter(a=>a.startsAt.startsWith(date)&&a.staffId===me.id&&a.status==='scheduled').length;
@@ -60,13 +147,16 @@ function renderMyBanner(){
     const right=node('div',undefined,'my-banner-actions');
     if(st.working){
       if(sh?.status==='present'){
-        right.append(node('span',`Tu turno hoy: ${sh.turnOrder}.º lugar`,'mini-tag'));
+        right.append(node('span',isStylist?'Llegada registrada hoy':`Tu turno hoy: ${sh.turnOrder}.º lugar`,'mini-tag'));
       }else{
         const btn=node('button','Marcar mi llegada','primary tiny-btn');btn.type='button';
-        btn.addEventListener('click',()=>saveShiftCheckIn(me.id,'present'));
+        btn.addEventListener('click',()=>isStylist?saveMyOwnArrival():saveShiftCheckIn(me.id,'present'));
         right.append(btn);
       }
     }
+    const profLink=node('a','Mi perfil y etiquetas','outline-button tiny-btn');
+    profLink.href='#perfil';
+    right.append(profLink);
     head.append(left,right);
     banner.append(head);
     banner.append(node('small',`Tus servicios habilitados: ${summarizeStaffServices(me)}`,'my-banner-services'));
@@ -146,7 +236,8 @@ function calendar(){
 
 function renderTeamBar(){
   const bar=$('agenda-team-bar');bar.replaceChildren();
-  if(!staff.length)return;
+  if(store.isStylist()||!staff.length){bar.hidden=true;return;}
+  bar.hidden=false;
   const activeHolders=[],resting=[];
   for(const m of staff.filter(s=>s.active&&s.canHoldAppointments)){
     const st=staffDayStatus(m,date);
@@ -166,7 +257,9 @@ function renderTeamBar(){
 
 function renderShiftsBar(){
   const bar=$('agenda-shifts-bar');bar.replaceChildren();
+  if(store.isStylist()){bar.hidden=true;return;}
   const working=staff.filter(s=>s.active&&s.canHoldAppointments&&staffDayStatus(s,date).working);
+  bar.hidden=!working.length;
   if(!working.length)return;
   const head=node('div',undefined,'shifts-head');
   head.append(node('strong','Orden de llegada (9:00 a.m.) · Turnos sin estilista pedida'),node('small','Marca quién llegó 1.º, 2.º y 3.º hoy para repartir los turnos.'));
@@ -245,6 +338,7 @@ function matchesFilter(a){
 }
 
 function buildAppointmentCard(a){
+  const isStylist=store.isStylist();
   const card=node('article',undefined,`appt-card ${a.status}`);
   const top=node('div',undefined,'appt-card-top');
   const duration=Math.round((Date.parse(a.endsAt)-Date.parse(a.startsAt))/60000);
@@ -257,63 +351,108 @@ function buildAppointmentCard(a){
   body.append(node('h4',a.clientName),node('p',a.serviceName,'appt-service'));
 
   const tags=node('div',undefined,'appt-tags');
-  tags.append(node('span',a.assignmentMode==='pool_turn'?'Por turno':'Solicitada','mini-tag'));
-  const svc=services.find(s=>s.id===a.serviceId);
-  const cap=a.staffId&&svc?resolveCap(a.staffId,svc):null;
-  if(cap==='plan_b')tags.append(node('span','Apoyo temporal','mini-tag warn'));
-  if(cap==='junior')tags.append(node('span','Colorista junior','mini-tag soft'));
-  if(a.rescheduleCount>0)tags.append(node('span',`Reprogramada ${a.rescheduleCount} ${a.rescheduleCount===1?'vez':'veces'}`,'mini-tag warn'));
-  if(a.clientNoShows>0)tags.append(node('span',`${a.clientNoShows} inasistencia${a.clientNoShows===1?'':'s'}`,'mini-tag danger'));
-  if(!whatsappPhone(a.clientPhone))tags.append(node('span','Falta celular','mini-tag warn'));
-  body.append(tags);
+  if(a.status==='scheduled'&&a.arrivalStatus==='arrived')tags.append(node('span','Clienta llegó','mini-tag arrival-arrived'));
+  else if(a.status==='scheduled'&&a.arrivalStatus==='not_arrived')tags.append(node('span','No llegó · Alerta enviada','mini-tag danger'));
+  if(!isStylist){
+    tags.append(node('span',a.assignmentMode==='pool_turn'?'Por turno':'Solicitada','mini-tag'));
+    const svc=services.find(s=>s.id===a.serviceId);
+    const cap=a.staffId&&svc?resolveCap(a.staffId,svc):null;
+    if(cap==='plan_b')tags.append(node('span','Apoyo temporal','mini-tag warn'));
+    if(cap==='junior')tags.append(node('span','Colorista junior','mini-tag soft'));
+    if(a.rescheduleCount>0)tags.append(node('span',`Reprogramada ${a.rescheduleCount} ${a.rescheduleCount===1?'vez':'veces'}`,'mini-tag warn'));
+    if(a.clientNoShows>0)tags.append(node('span',`${a.clientNoShows} inasistencia${a.clientNoShows===1?'':'s'}`,'mini-tag danger'));
+    if(!whatsappPhone(a.clientPhone))tags.append(node('span','Falta celular','mini-tag warn'));
+  }
+  if(tags.childNodes.length)body.append(tags);
   if(a.notes)body.append(node('p',a.notes,'appointment-note'));
   if(a.cancelReason&&(a.status==='cancelled'||a.status==='no_show'))body.append(node('small','Motivo: '+a.cancelReason));
   card.append(body);
 
   const actions=node('div',undefined,'appt-card-actions');
   if(a.status==='scheduled'){
-    if(!a.staffId){
-      const assignBtn=node('button','Asignar por llegada','primary tiny-btn');assignBtn.type='button';
-      assignBtn.addEventListener('click',async()=>{
-        assignBtn.disabled=true;
-        try{const r=await api('/api/agenda/assign-turn',{method:'POST',body:JSON.stringify({appointmentId:a.id})});message(`Asignada a ${r.assigned.shortName}${r.assigned.turnOrder?' (turno '+r.assigned.turnOrder+')':''}.`);await load();}
-        catch(e){message(e.message,true);assignBtn.disabled=false;}
+    if(isStylist){
+      const arrivedBtn=node('button',a.arrivalStatus==='arrived'?'✓ Llegó':'Llegó','tiny-btn arrival-arrived-btn'+(a.arrivalStatus==='arrived'?' is-active':''));
+      arrivedBtn.type='button';
+      arrivedBtn.disabled=a.arrivalStatus==='arrived';
+      arrivedBtn.addEventListener('click',async()=>{
+        arrivedBtn.disabled=true;
+        try{
+          await api('/api/appointments/'+a.id+'/arrival',{method:'POST',body:JSON.stringify({status:'arrived'})});
+          message(`Asistencia registrada: ${a.clientName} llegó.`);
+          await load();
+        }catch(e){message(e.message,true);arrivedBtn.disabled=false;}
       });
-      actions.append(assignBtn);
-    }
-    if(whatsappPhone(a.clientPhone)){
-      for(const [moment,label] of [['day_before','Recordar (día antes)'],['same_day','Recordar (hoy)']]){
-        const wa=node('button',label,'tiny-btn message-button');wa.type='button';
-        wa.addEventListener('click',async()=>{
-          try{
-            const url=whatsappLink(a.clientPhone,reminderDraft(a,moment));
-            window.open(url,'_blank','noopener,noreferrer');
-            await api('/api/appointments/'+a.id+'/remind',{method:'POST',body:JSON.stringify({moment})});
-            await load();
-          }catch(e){message(e.message,true);}
+
+      const missedBtn=node('button','No llegó','tiny-btn arrival-missed-btn');
+      missedBtn.type='button';
+      missedBtn.addEventListener('click',async()=>{
+        missedBtn.disabled=true;
+        try{
+          await api('/api/appointments/'+a.id+'/arrival',{method:'POST',body:JSON.stringify({status:'not_arrived'})});
+          message('Alerta enviada a Administración: la clienta no llegó.');
+          await load();
+        }catch(e){message(e.message,true);missedBtn.disabled=false;}
+      });
+
+      const remBtn=node('button','Recordatorio','tiny-btn message-button');
+      remBtn.type='button';
+      remBtn.addEventListener('click',async()=>{
+        remBtn.disabled=true;
+        try{
+          await api('/api/appointments/'+a.id+'/alert-reminder',{method:'POST',body:'{}'});
+          message('Solicitud de recordatorio enviada a Administración.');
+        }catch(e){message(e.message,true);}
+        finally{remBtn.disabled=false;}
+      });
+
+      const comp=node('button','Realizada','tiny-btn');comp.type='button';
+      if(Date.parse(a.endsAt)>Date.now()){comp.disabled=true;comp.title='Disponible al finalizar la hora de la cita.';}
+      comp.addEventListener('click',()=>confirmAction(a,'complete'));
+      actions.append(arrivedBtn,missedBtn,remBtn,comp);
+    } else {
+      if(!a.staffId){
+        const assignBtn=node('button','Asignar por llegada','primary tiny-btn');assignBtn.type='button';
+        assignBtn.addEventListener('click',async()=>{
+          assignBtn.disabled=true;
+          try{const r=await api('/api/agenda/assign-turn',{method:'POST',body:JSON.stringify({appointmentId:a.id})});message(`Asignada a ${r.assigned.shortName}${r.assigned.turnOrder?' (turno '+r.assigned.turnOrder+')':''}.`);await load();}
+          catch(e){message(e.message,true);assignBtn.disabled=false;}
         });
-        actions.append(wa);
+        actions.append(assignBtn);
       }
+      if(whatsappPhone(a.clientPhone)){
+        for(const [moment,label] of [['day_before','Recordar (día antes)'],['same_day','Recordar (hoy)']]){
+          const wa=node('button',label,'tiny-btn message-button');wa.type='button';
+          wa.addEventListener('click',async()=>{
+            try{
+              const url=whatsappLink(a.clientPhone,reminderDraft(a,moment));
+              window.open(url,'_blank','noopener,noreferrer');
+              await api('/api/appointments/'+a.id+'/remind',{method:'POST',body:JSON.stringify({moment})});
+              await load();
+            }catch(e){message(e.message,true);}
+          });
+          actions.append(wa);
+        }
+      }
+      if(a.confirmationStatus!=='confirmed'){
+        const conf=node('button','Confirmó','tiny-btn');conf.type='button';
+        conf.addEventListener('click',async()=>{try{await api('/api/appointments/'+a.id+'/confirm',{method:'POST',body:'{}'});await load();}catch(e){message(e.message,true);}});
+        actions.append(conf);
+      }
+      const edit=node('button','Reprogramar','tiny-btn');edit.type='button';
+      edit.addEventListener('click',()=>openEditor(a));actions.append(edit);
+      const comp=node('button','Realizada','tiny-btn');comp.type='button';
+      if(Date.parse(a.endsAt)>Date.now()){comp.disabled=true;comp.title='Disponible al finalizar la hora de la cita.';}
+      comp.addEventListener('click',()=>confirmAction(a,'complete'));actions.append(comp);
+      const ns=node('button','No asistió','tiny-btn');ns.type='button';
+      ns.addEventListener('click',()=>confirmAction(a,'no-show'));actions.append(ns);
+      const cancel=node('button','Cancelar','tiny-btn');cancel.type='button';
+      cancel.addEventListener('click',()=>confirmAction(a,'cancel'));actions.append(cancel);
     }
-    if(a.confirmationStatus!=='confirmed'){
-      const conf=node('button','Confirmó','tiny-btn');conf.type='button';
-      conf.addEventListener('click',async()=>{try{await api('/api/appointments/'+a.id+'/confirm',{method:'POST',body:'{}'});await load();}catch(e){message(e.message,true);}});
-      actions.append(conf);
-    }
-    const edit=node('button','Reprogramar','tiny-btn');edit.type='button';
-    edit.addEventListener('click',()=>openEditor(a));actions.append(edit);
-    const comp=node('button','Realizada','tiny-btn');comp.type='button';
-    if(Date.parse(a.endsAt)>Date.now()){comp.disabled=true;comp.title='Disponible al finalizar la hora de la cita.';}
-    comp.addEventListener('click',()=>confirmAction(a,'complete'));actions.append(comp);
-    const ns=node('button','No asistió','tiny-btn');ns.type='button';
-    ns.addEventListener('click',()=>confirmAction(a,'no-show'));actions.append(ns);
-    const cancel=node('button','Cancelar','tiny-btn');cancel.type='button';
-    cancel.addEventListener('click',()=>confirmAction(a,'cancel'));actions.append(cancel);
-  } else if(a.status!=='completed'){
+  } else if(a.status!=='completed'&&!isStylist){
     const rebook=node('button','Reprogramar','tiny-btn');rebook.type='button';
     rebook.addEventListener('click',()=>openEditor(a));actions.append(rebook);
   }
-  card.append(actions);
+  if(actions.childNodes.length)card.append(actions);
   return card;
 }
 
@@ -321,27 +460,30 @@ function render(){
   initScopeIfNeeded();
   calendar();$('agenda-date').value=date;$('agenda-day-title').textContent=fmtDay(date);
   renderMyBanner();renderTeamBar();renderShiftsBar();
+  const isStylist=store.isStylist();
   const me=getMyStaff();
-  const onlyMine=agendaScope==='mine'&&me&&me.canHoldAppointments;
+  const onlyMine=isStylist||(agendaScope==='mine'&&me&&me.canHoldAppointments);
   const dayRows=appointments.filter(a=>a.startsAt.startsWith(date));
   const active=dayRows.filter(a=>a.status==='scheduled');
   const confirmed=active.filter(a=>a.confirmationStatus==='confirmed').length;
   const done=dayRows.filter(a=>a.status==='completed').length;
   const noShows=dayRows.filter(a=>a.status==='no_show').length;
-  if(onlyMine){
+  if(onlyMine&&me){
     const myActive=active.filter(a=>a.staffId===me.id);
     const myDone=dayRows.filter(a=>a.staffId===me.id&&a.status==='completed').length;
-    $('agenda-day-count').textContent=`Tus citas: ${myActive.length} programada${myActive.length===1?'':'s'} · ${myDone} realizada${myDone===1?'':'s'} · Salón total: ${active.length}`;
+    $('agenda-day-count').textContent=isStylist
+      ?`Tus citas: ${myActive.length} programada${myActive.length===1?'':'s'} · ${myDone} realizada${myDone===1?'':'s'}`
+      :`Tus citas: ${myActive.length} programada${myActive.length===1?'':'s'} · ${myDone} realizada${myDone===1?'':'s'} · Salón total: ${active.length}`;
   } else {
     $('agenda-day-count').textContent=`${active.length} programada${active.length===1?'':'s'} (${confirmed} confirm.) · ${done} realizadas${noShows?` · ${noShows} no asistió`:''}`;
   }
 
   const rows=dayRows.filter(matchesFilter);
-  const allPool=rows.filter(a=>!a.staffId);
-  const poolRows=onlyMine?allPool.filter(a=>{const svc=services.find(s=>s.id===a.serviceId);return !svc||!!resolveCap(me.id,svc);}):allPool;
+  const allPool=isStylist?[]:rows.filter(a=>!a.staffId);
+  const poolRows=onlyMine&&me?allPool.filter(a=>{const svc=services.find(s=>s.id===a.serviceId);return !svc||!!resolveCap(me.id,svc);}):allPool;
   const poolLane=$('agenda-pool-lane');poolLane.replaceChildren();
-  poolLane.hidden=poolRows.length===0;
-  if(poolRows.length){
+  poolLane.hidden=isStylist||poolRows.length===0;
+  if(!isStylist&&poolRows.length){
     poolLane.append(node('h3',onlyMine?`Citas por turno que puedes atender (${poolRows.length})`:`Por asignar según orden de llegada (${poolRows.length})`));
     const wrap=node('div',undefined,'pool-cards');
     for(const a of poolRows)wrap.append(buildAppointmentCard(a));
@@ -351,7 +493,7 @@ function render(){
   const board=$('agenda-board');board.replaceChildren();
   let columns=[];
   if(onlyMine){
-    columns=[me];
+    columns=me?[me]:[];
   } else {
     const workingStaff=staff.filter(s=>s.active&&s.canHoldAppointments&&staffDayStatus(s,date).working);
     const assignedStaffIds=new Set(rows.filter(a=>a.staffId).map(a=>a.staffId));
@@ -359,7 +501,7 @@ function render(){
     for(const m of staff){if(assignedStaffIds.has(m.id)&&!columns.some(c=>c.id===m.id))columns.push(m);}
   }
 
-  const visibleRows=onlyMine?rows.filter(a=>a.staffId===me.id||poolRows.includes(a)):rows;
+  const visibleRows=onlyMine&&me?rows.filter(a=>a.staffId===me.id||poolRows.includes(a)):rows;
   const hasAny=visibleRows.length>0||columns.length>0;
   $('agenda-empty').hidden=visibleRows.length>0;
   board.hidden=!hasAny;
@@ -369,7 +511,8 @@ function render(){
     const st=staffDayStatus(col,date);
     const sh=dailyShifts.find(s=>s.staffId===col.id&&s.status==='present');
     const head=node('header',undefined,'staff-column-head');
-    head.append(node('h3',`${sh?sh.turnOrder+'.º · ':''}${col.shortName||col.displayName}${me&&col.id===me.id?' (Tú)':''}`),node('small',st.working?(ROLE_LABELS[col.role]||'Estilista'):`No labora (${st.reason})`));
+    const prefix=!isStylist&&sh?sh.turnOrder+'.º · ':'';
+    head.append(node('h3',`${prefix}${col.shortName||col.displayName}${me&&col.id===me.id?' (Tú)':''}`),node('small',st.working?(ROLE_LABELS[col.role]||'Estilista'):`No labora (${st.reason})`));
     colEl.append(head);
     const colRows=rows.filter(a=>a.staffId===col.id);
     if(!colRows.length){
@@ -415,18 +558,101 @@ async function load(forceBootstrap=false){
   finally{loading=false;$('agenda-refresh').disabled=false;$('agenda-new').disabled=!preferences;}
 }
 
-function populateClientOptions(query='',selectedId=''){
-  const q=clean(query).trim();
-  let list=clients;
-  if(q)list=clients.filter(c=>clean(c.name).includes(q)||String(c.dni||'').includes(q)||String(c.phone||'').includes(q));
-  const capped=list.slice(0,25);
-  if(selectedId&&!capped.some(c=>c.id===selectedId)){
-    const sel=clients.find(c=>c.id===selectedId);if(sel)capped.unshift(sel);
+let apptClientMatches=[],apptClientActiveIdx=-1;
+
+function advanceToStep(stepId,focusId=null){
+  const stepEl=$(stepId);
+  if(!stepEl)return;
+  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  stepEl.scrollIntoView({behavior:reduced?'auto':'smooth',block:'center'});
+  stepEl.classList.remove('step-highlight');
+  void stepEl.offsetWidth;
+  stepEl.classList.add('step-highlight');
+  setTimeout(()=>stepEl.classList.remove('step-highlight'),1200);
+  if(focusId){
+    const target=$(focusId);
+    if(target&&!target.disabled&&!target.hidden){
+      setTimeout(()=>{try{target.focus({preventScroll:true});}catch{target.focus();}},reduced?0:180);
+    }
   }
-  const select=$('appointment-client');select.replaceChildren(new Option(list.length?`Selecciona una clienta (${capped.length} de ${list.length})`:'Sin coincidencias',''));
-  for(const c of capped)select.append(new Option(c.name+(c.dni?' · DNI ····'+c.dni.slice(-4):' · DNI pendiente'),c.id));
-  select.value=selectedId||'';
-  renderClientContext(select.value);
+}
+
+function hideClientSuggestions(){
+  const list=$('appointment-client-suggestions');
+  if(list)list.hidden=true;
+  $('appointment-search')?.setAttribute('aria-expanded','false');
+  apptClientActiveIdx=-1;
+}
+
+function selectAppointmentClient(client,{advance=false}={}){
+  if(!client){
+    $('appointment-client').value='';
+    $('appointment-search').value='';
+    $('appointment-search').classList.remove('is-selected');
+    $('appointment-client-clear').hidden=true;
+    renderClientContext('');
+    return;
+  }
+  $('appointment-client').value=client.id;
+  $('appointment-search').value=client.name;
+  $('appointment-search').classList.add('is-selected');
+  $('appointment-client-clear').hidden=false;
+  hideClientSuggestions();
+  renderClientContext(client.id);
+  if(advance)advanceToStep('appt-step-service','appointment-service');
+}
+
+function highlightClientSuggestion(){
+  const list=$('appointment-client-suggestions');
+  if(!list)return;
+  const btns=list.querySelectorAll('[role=option]');
+  btns.forEach((b,i)=>b.setAttribute('aria-selected',String(i===apptClientActiveIdx)));
+  if(apptClientActiveIdx>=0&&btns[apptClientActiveIdx])btns[apptClientActiveIdx].scrollIntoView({block:'nearest'});
+}
+
+function showClientSuggestions(query=''){
+  const list=$('appointment-client-suggestions');
+  if(!list)return;
+  const q=clean(query).trim();
+  const digits=q.replace(/\D/g,'');
+  let matches=clients;
+  if(q){
+    matches=clients.filter(c=>clean(c.name).includes(q)||String(c.dni||'').includes(q)||(digits&&String(c.phone||'').replace(/\D/g,'').includes(digits)));
+  }
+  apptClientMatches=matches.slice(0,12);
+  apptClientActiveIdx=-1;
+  list.replaceChildren();
+
+  if(!apptClientMatches.length){
+    list.append(node('div','No encontramos esa clienta. Puedes crear su ficha abajo.','no-suggestions'));
+  } else {
+    apptClientMatches.forEach((c,i)=>{
+      const b=node('button');b.type='button';b.role='option';b.id='appt-client-opt-'+i;b.tabIndex=-1;b.setAttribute('aria-selected','false');
+      const ini=String(c.name||'C').trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'C';
+      b.append(node('span',ini,'avatar'));
+      const desc=node('span',undefined,'suggestion-text');
+      desc.append(
+        node('strong',c.name),
+        node('small',(c.phone||'Sin teléfono')+(c.dni?' · DNI ····'+c.dni.slice(-4):' · DNI pendiente'))
+      );
+      b.append(desc);
+      b.addEventListener('pointerdown',e=>e.preventDefault());
+      b.addEventListener('click',()=>selectAppointmentClient(c,{advance:true}));
+      list.append(b);
+    });
+    if(matches.length>apptClientMatches.length){
+      list.append(node('div',`Mostrando ${apptClientMatches.length} de ${matches.length} · Escribe más letras para filtrar`,'no-suggestions'));
+    }
+  }
+
+  const addNew=node('button','+ Crear nueva clienta','suggestion-add-btn');
+  addNew.type='button';
+  addNew.addEventListener('pointerdown',e=>e.preventDefault());
+  addNew.addEventListener('click',()=>{hideClientSuggestions();window.dispatchEvent(new Event('touche:create-client'));});
+  list.append(addNew);
+
+  list.hidden=false;
+  $('appointment-search')?.setAttribute('aria-expanded','true');
 }
 
 function renderClientContext(clientId){
@@ -517,6 +743,7 @@ function refreshStaffOptions(preserveId=null){
           if(reqRadio)reqRadio.checked=true;
           select.required=true;select.value=best.m.id;
           $('appointment-staff-hint').textContent=`Seleccionada: ${best.m.displayName} (recomendada para ${svc.name}).`;
+          advanceToStep('appt-step-notes','appointment-save');
         });
         const pickRand=node('button','Elegir al azar entre disponibles','tiny-btn');pickRand.type='button';pickRand.id='appointment-pick-random';
         pickRand.addEventListener('click',()=>{
@@ -560,14 +787,15 @@ function openEditor(a=null){
     }
   }
   editingAppointment=a;
-  $('appointment-client-status').textContent='Añade su ficha aquí y continúa con la cita.';
+  $('appointment-client-status').textContent='Si aún no tiene ficha, créala aquí y sigue con la cita.';
   $('appointment-form').reset();$('appointment-error').hidden=true;
   $('appointment-id').value=a?.id||'';
   $('appointment-title').textContent=a?'Reprogramar / Editar cita':'Agendar clienta';
   $('appointment-reschedule-wrap').hidden=!a;
   $('appointment-reschedule-reason').value='';
-  $('appointment-search').value='';
-  populateClientOptions('',a?.clientId||'');
+  hideClientSuggestions();
+  const initialClient=a?.clientId?clients.find(c=>c.id===a.clientId)||null:null;
+  selectAppointmentClient(initialClient,{advance:false});
 
   const svcSel=$('appointment-service');
   svcSel.replaceChildren(new Option('Selecciona un servicio',''));
@@ -583,7 +811,11 @@ function openEditor(a=null){
   const mode=a?.assignmentMode==='pool_turn'?'pool_turn':'requested';
   document.querySelector(`input[name=assignmentMode][value=${mode}]`).checked=true;
   updateServiceHint();updateEndPreview();refreshStaffOptions(a?.staffId||'');
-  $('appointment-editor').showModal();$('appointment-search').focus();
+  $('appointment-editor').showModal();
+  const bodyEl=$('appointment-editor').querySelector('.editor-body');
+  if(bodyEl)bodyEl.scrollTop=0;
+  if(!initialClient){$('appointment-search').focus();}
+  else {$('appointment-service').focus();}
 }
 
 function updateServiceHint(){
@@ -593,18 +825,59 @@ function updateServiceHint(){
   $('appointment-service-hint').textContent=`Referencia confirmada: ${range}.`;
 }
 
-$('appointment-search').addEventListener('input',debounce(()=>{populateClientOptions($('appointment-search').value,$('appointment-client').value);},150));
-$('appointment-client').addEventListener('change',()=>renderClientContext($('appointment-client').value));
+$('appointment-search').addEventListener('focus',()=>{
+  if(!$('appointment-client').value)showClientSuggestions($('appointment-search').value);
+});
+$('appointment-search').addEventListener('input',debounce(()=>{
+  const curId=$('appointment-client').value;
+  const curClient=curId?clients.find(c=>c.id===curId):null;
+  if(!curClient||$('appointment-search').value.trim()!==curClient.name){
+    $('appointment-client').value='';
+    $('appointment-search').classList.remove('is-selected');
+    $('appointment-client-clear').hidden=true;
+    renderClientContext('');
+  }
+  showClientSuggestions($('appointment-search').value);
+},120));
+$('appointment-search').addEventListener('keydown',e=>{
+  const list=$('appointment-client-suggestions');
+  if(e.key==='Escape'){if(!list.hidden){e.preventDefault();hideClientSuggestions();}return;}
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault();
+    if(list.hidden)showClientSuggestions($('appointment-search').value);
+    if(!apptClientMatches.length)return;
+    apptClientActiveIdx=(apptClientActiveIdx+(e.key==='ArrowDown'?1:-1)+apptClientMatches.length)%apptClientMatches.length;
+    highlightClientSuggestion();
+    return;
+  }
+  if(e.key==='Enter'&&!list.hidden){
+    e.preventDefault();
+    const chosen=apptClientActiveIdx>=0?apptClientMatches[apptClientActiveIdx]:(apptClientMatches.length===1?apptClientMatches[0]:null);
+    if(chosen)selectAppointmentClient(chosen,{advance:true});
+  }
+});
+$('appointment-search').addEventListener('blur',e=>{
+  if(!$('appointment-client-suggestions').contains(e.relatedTarget))hideClientSuggestions();
+});
+$('appointment-client-clear').addEventListener('click',()=>{
+  selectAppointmentClient(null,{advance:false});
+  $('appointment-search').focus();
+  showClientSuggestions('');
+});
 $('appointment-new-client').addEventListener('click',()=>window.dispatchEvent(new Event('touche:create-client')));
 window.addEventListener('touche:agenda-client-closed',event=>{
   if(!$('appointment-editor').open)return;
   const client=event.detail?.client;
   if(client){
-    clients=clients.filter(c=>c.id!==client.id);clients.push({...client,lastVisit:null,lastService:null,lastTechNote:null,noShowCount:0});
-    $('appointment-search').value='';populateClientOptions('',client.id);
-    $('appointment-client-status').textContent='Clienta creada y seleccionada. Puedes continuar con su cita.';
-  } else $('appointment-client-status').textContent='Puedes continuar con la cita.';
-  $('appointment-client').focus();
+    clients=clients.filter(c=>c.id!==client.id);
+    const added={...client,lastVisit:null,lastService:null,lastTechNote:null,noShowCount:0};
+    clients.push(added);
+    selectAppointmentClient(added,{advance:true});
+    $('appointment-client-status').textContent='Clienta creada y seleccionada. Continúa eligiendo el servicio.';
+  } else {
+    $('appointment-client-status').textContent='Puedes continuar con la cita.';
+    $('appointment-search').focus();
+  }
 });
 
 $('appointment-service').addEventListener('change',()=>{
@@ -612,14 +885,44 @@ $('appointment-service').addEventListener('change',()=>{
   if(s?.durationMinutes&&!editingAppointment)$('appointment-duration').value=s.durationMinutes;
   else if(s?.durationMinutes&&!$('appointment-duration').value)$('appointment-duration').value=s.durationMinutes;
   updateServiceHint();updateEndPreview();refreshStaffOptions();
+  if(s)advanceToStep('appt-step-when','appointment-time');
 });
-for(const button of document.querySelectorAll('[data-duration]'))button.addEventListener('click',()=>{$('appointment-duration').value=button.dataset.duration;updateEndPreview();refreshStaffOptions();});
+for(const button of document.querySelectorAll('[data-duration]'))button.addEventListener('click',()=>{
+  $('appointment-duration').value=button.dataset.duration;
+  updateEndPreview();refreshStaffOptions();
+  advanceToStep('appt-step-staff',$('appointment-pick-best')?'appointment-pick-best':'appointment-staff');
+});
 $('appointment-add-eval').addEventListener('click',()=>{const cur=Number($('appointment-duration').value)||0;$('appointment-duration').value=Math.min(600,cur+20);updateEndPreview();refreshStaffOptions();});
-for(const id of ['appointment-date','appointment-time','appointment-duration'])$(id).addEventListener('change',()=>{updateEndPreview();refreshStaffOptions();});
-for(const r of document.querySelectorAll('input[name=assignmentMode]'))r.addEventListener('change',()=>refreshStaffOptions());
+$('appointment-date').addEventListener('change',()=>{updateEndPreview();refreshStaffOptions();advanceToStep('appt-step-when','appointment-time');});
+$('appointment-time').addEventListener('change',()=>{
+  updateEndPreview();refreshStaffOptions();
+  if(/^\d{2}:\d{2}$/.test($('appointment-time').value)){
+    if(!$('appointment-duration').value)advanceToStep('appt-step-duration','appointment-duration');
+    else advanceToStep('appt-step-staff',$('appointment-pick-best')?'appointment-pick-best':'appointment-staff');
+  }
+});
+$('appointment-duration').addEventListener('change',()=>{
+  updateEndPreview();refreshStaffOptions();
+  if(Number($('appointment-duration').value)>=5)advanceToStep('appt-step-staff',$('appointment-pick-best')?'appointment-pick-best':'appointment-staff');
+});
+$('appointment-staff').addEventListener('change',()=>{
+  if($('appointment-staff').value)advanceToStep('appt-step-notes','appointment-save');
+});
+for(const r of document.querySelectorAll('input[name=assignmentMode]'))r.addEventListener('change',()=>{
+  refreshStaffOptions();
+  if(r.value==='pool_turn'&&r.checked)advanceToStep('appt-step-notes','appointment-save');
+});
 
 $('appointment-form').addEventListener('submit',async e=>{
-  e.preventDefault();const b=$('appointment-save');if(b.disabled)return;b.disabled=true;$('appointment-error').hidden=true;
+  e.preventDefault();const b=$('appointment-save');if(b.disabled)return;$('appointment-error').hidden=true;
+  if(!$('appointment-client').value){
+    $('appointment-error').textContent='Busca y elige una clienta de la lista (o crea una nueva).';
+    $('appointment-error').hidden=false;
+    advanceToStep('appt-step-client','appointment-search');
+    showClientSuggestions($('appointment-search').value);
+    return;
+  }
+  b.disabled=true;
   try{
     const id=$('appointment-id').value;
     const mode=document.querySelector('input[name=assignmentMode]:checked').value;
@@ -668,7 +971,13 @@ $('agenda-confirm-save').addEventListener('click',async()=>{
 });
 
 /* Team, services per stylist & service durations modal */
-let pendingDeleteStaff=null,editingOverrides=[];
+let pendingDeleteStaff=null,editingStaffMember=null;
+let staffCatMap=new Map(),staffOvrMap=new Map(),staffSelectedCat='';
+
+function staffInitials(name){
+  const parts=String(name||'').trim().split(/\s+/).filter(Boolean);
+  return parts.length?parts.slice(0,2).map(x=>x[0]).join('').toUpperCase():'+';
+}
 
 function catalogCategories(){
   const cats=[...new Set(services.map(s=>s.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
@@ -685,6 +994,115 @@ function summarizeStaffServices(member){
   }
   if(ovrs.length)tags.push(`+${ovrs.length} servicio${ovrs.length===1?'':'s'} puntual${ovrs.length===1?'':'es'}`);
   return tags.length?tags.join(' · '):'Sin servicios asignados aún';
+}
+
+function syncStaffRolePills(role){
+  $('staff-edit-role').value=role;
+  for(const b of document.querySelectorAll('[data-staff-role]')){
+    const sel=b.dataset.staffRole===role;
+    b.classList.toggle('selected',sel);
+    b.setAttribute('aria-pressed',String(sel));
+  }
+  const isRec=role==='reception';
+  $('staff-edit-holds').checked=!isRec;
+  $('staff-capabilities-section').hidden=isRec;
+}
+
+function syncStaffRestPills(restVal){
+  const str=restVal===null||restVal===undefined?'':String(restVal);
+  $('staff-edit-rest').value=str;
+  for(const b of document.querySelectorAll('[data-staff-rest]')){
+    const sel=b.dataset.staffRest===str;
+    b.classList.toggle('selected',sel);
+    b.setAttribute('aria-pressed',String(sel));
+  }
+}
+
+function defaultStaffCapLevel(){
+  return $('staff-edit-role').value==='junior_stylist_assistant'?'junior':'primary';
+}
+
+function renderStaffActiveChips(){
+  const box=$('staff-active-chips');if(!box)return;
+  box.replaceChildren();
+  const svcById=new Map(services.map(s=>[s.id,s]));
+  let count=0;
+  for(const [cat,lvl] of [...staffCatMap.entries()].sort((a,b)=>a[0].localeCompare(b[0],'es'))){
+    count++;
+    const chip=node('span',undefined,'profile-tag-chip'+(lvl==='plan_b'?' warn':lvl==='junior'?' soft':''));
+    chip.append(node('span',lvl==='primary'?cat:`${cat} · ${CAP_LABELS[lvl]||lvl}`));
+    const rm=node('button','×','chip-rm');rm.type='button';rm.title=`Quitar ${cat}`;
+    rm.addEventListener('click',()=>{staffCatMap.delete(cat);renderStaffCapEditor();});
+    chip.append(rm);box.append(chip);
+  }
+  for(const [sid,lvl] of staffOvrMap.entries()){
+    const svc=svcById.get(sid);if(!svc)continue;
+    count++;
+    const isOff=lvl==='disabled';
+    const chip=node('span',undefined,'profile-tag-chip'+(isOff?' danger':' soft'));
+    chip.append(node('span',isOff?`No realiza: ${svc.name}`:`${svc.name}${lvl!=='primary'?` (${CAP_LABELS[lvl]||lvl})`:''}`));
+    const rm=node('button','×','chip-rm');rm.type='button';rm.title=`Quitar ${svc.name}`;
+    rm.addEventListener('click',()=>{staffOvrMap.delete(sid);renderStaffCapEditor();});
+    chip.append(rm);box.append(chip);
+  }
+  if(!count)box.append(node('span','Sin servicios seleccionados. Usa una plantilla rápida o toca una categoría abajo.','field-help'));
+}
+
+function renderStaffCatPanel(){
+  const q=clean($('staff-svc-filter')?.value||'').trim();
+  const allCatSvcs=services.filter(s=>s.category===staffSelectedCat);
+  const shown=q?allCatSvcs.filter(s=>clean(s.name).includes(q)):allCatSvcs;
+  const catLvl=staffCatMap.get(staffSelectedCat)||'';
+  $('staff-cat-title').textContent=`${staffSelectedCat} (${allCatSvcs.length})`;
+  for(const b of document.querySelectorAll('[data-cat-lvl]')){
+    const sel=b.dataset.catLvl===catLvl;
+    b.classList.toggle('selected',sel);
+    b.setAttribute('aria-pressed',String(sel));
+  }
+  $('staff-cat-hint').textContent=catLvl
+    ?`Realiza toda la categoría ${staffSelectedCat}. Toca un servicio abajo si deseas excluirlo.`
+    :`Toca los servicios puntuales de ${staffSelectedCat} que realiza, o elige arriba «Titular / Junior / Apoyo temporal».`;
+  const wrap=$('staff-cat-services');wrap.replaceChildren();
+  if(!shown.length){wrap.append(node('span','Sin coincidencias en esta categoría.','field-help'));return;}
+  for(const s of shown){
+    const ovr=staffOvrMap.get(s.id);
+    const active=ovr?ovr!=='disabled':!!catLvl;
+    const btn=node('button',undefined,'service-tag-btn'+(active?' active':'')+(ovr==='disabled'?' excluded':''));
+    btn.type='button';btn.setAttribute('aria-pressed',String(active));
+    const suffix=ovr==='disabled'?' (excluido)':(ovr&&ovr!=='primary'?` · ${CAP_LABELS[ovr]}`:'');
+    btn.textContent=(active?'✓ ':'+ ')+s.name+suffix;
+    btn.addEventListener('click',()=>{
+      if(catLvl){
+        if(ovr==='disabled')staffOvrMap.delete(s.id);
+        else staffOvrMap.set(s.id,'disabled');
+      } else {
+        if(ovr&&ovr!=='disabled')staffOvrMap.delete(s.id);
+        else staffOvrMap.set(s.id,defaultStaffCapLevel());
+      }
+      renderStaffCapEditor();
+    });
+    wrap.append(btn);
+  }
+}
+
+function renderStaffCapEditor(){
+  renderStaffActiveChips();
+  const bar=$('staff-cat-menubar');if(!bar)return;
+  bar.replaceChildren();
+  const cats=catalogCategories();
+  if(!staffSelectedCat||!cats.includes(staffSelectedCat))staffSelectedCat=cats[0];
+  for(const cat of cats){
+    const catSvcs=services.filter(s=>s.category===cat);
+    const hasCat=staffCatMap.has(cat);
+    const activeCount=hasCat?catSvcs.length:catSvcs.filter(s=>staffOvrMap.has(s.id)&&staffOvrMap.get(s.id)!=='disabled').length;
+    const btn=node('button',undefined,'cat-menu-btn'+(cat===staffSelectedCat?' current':'')+(activeCount>0?' has-tags':''));
+    btn.type='button';btn.setAttribute('aria-pressed',String(cat===staffSelectedCat));
+    btn.append(node('span',cat));
+    if(activeCount>0)btn.append(node('small',String(activeCount),'cat-menu-badge'));
+    btn.addEventListener('click',()=>{staffSelectedCat=cat;if($('staff-svc-filter'))$('staff-svc-filter').value='';renderStaffCapEditor();});
+    bar.append(btn);
+  }
+  renderStaffCatPanel();
 }
 
 function renderStaffModal(){
@@ -735,58 +1153,35 @@ function renderStaffModal(){
   renderServiceDurations();
 }
 
-function renderStaffOverridesEditor(){
-  const list=$('staff-ovr-list');list.replaceChildren();
-  if(!editingOverrides.length){
-    list.append(node('p','Sin excepciones puntuales.','field-help'));
-    return;
-  }
-  for(const ovr of editingOverrides){
-    const svc=services.find(s=>s.id===ovr.serviceId);
-    const chip=node('div',undefined,'ovr-chip');
-    chip.append(node('span',`${svc?svc.name:ovr.serviceId} · ${CAP_LABELS[ovr.capabilityLevel]||ovr.capabilityLevel}`));
-    const rm=node('button','×','tiny-btn');rm.type='button';rm.title='Quitar';
-    rm.addEventListener('click',()=>{editingOverrides=editingOverrides.filter(o=>o.serviceId!==ovr.serviceId);renderStaffOverridesEditor();});
-    chip.append(rm);
-    list.append(chip);
-  }
-}
-
 function openStaffEditor(member=null){
+  editingStaffMember=member;
   $('staff-editor-form').reset();
   $('staff-editor-error').hidden=true;
   $('staff-edit-id').value=member?.id||'';
-  $('staff-editor-title').textContent=member?`Editar a ${member.displayName}`:'Agregar colaboradora';
+  $('staff-editor-top-label').textContent=member?'Editar ficha de colaboradora':'Nueva colaboradora';
+  $('staff-editor-title').textContent=member?member.displayName:'Agregar colaboradora';
+  $('staff-editor-avatar').textContent=member?staffInitials(member.displayName):'+';
   $('staff-edit-name').value=member?.displayName||'';
   $('staff-edit-short').value=member?.shortName||'';
-  $('staff-edit-role').value=member?.role||'stylist';
-  $('staff-edit-rest').value=member&&member.restWeekday!==null&&member.restWeekday!==undefined?String(member.restWeekday):'';
-  $('staff-edit-holds').checked=member?!!member.canHoldAppointments:true;
   $('staff-edit-summary').value=member?.specialtySummary||'';
+  syncStaffRolePills(member?.role||'stylist');
+  syncStaffRestPills(member?member.restWeekday:'');
+  $('staff-edit-holds').checked=member?!!member.canHoldAppointments:$('staff-edit-role').value!=='reception';
   $('staff-capabilities-section').hidden=!$('staff-edit-holds').checked;
+  if($('staff-svc-filter'))$('staff-svc-filter').value='';
+  if($('staff-editor-retire'))$('staff-editor-retire').hidden=!member;
 
-  // Build category capabilities dropdowns
-  const grid=$('staff-cat-grid');grid.replaceChildren();
-  const capMap=new Map(member?categoryCaps.filter(c=>c.staffId===member.id).map(c=>[c.category,c.capabilityLevel]):[]);
-  for(const cat of catalogCategories()){
-    const item=node('label',undefined,'staff-cat-item');
-    item.append(node('span',cat));
-    const sel=document.createElement('select');
-    sel.dataset.staffCat=cat;
-    sel.append(new Option('No realiza',''),new Option('Titular (principal)','primary'),new Option('Nivel junior','junior'),new Option('Apoyo temporal','plan_b'));
-    sel.value=capMap.get(cat)||'';
-    item.append(sel);
-    grid.append(item);
-  }
+  staffCatMap=new Map(member?categoryCaps.filter(c=>c.staffId===member.id).map(c=>[c.category,c.capabilityLevel]):[]);
+  staffOvrMap=new Map(member?serviceOverrides.filter(o=>o.staffId===member.id).map(o=>[o.serviceId,o.capabilityLevel]):[]);
+  const cats=catalogCategories();
+  staffSelectedCat=cats.find(c=>staffCatMap.has(c))||cats[0]||'';
+  renderStaffCapEditor();
 
-  // Populate service picker & existing overrides
-  const ovrSel=$('staff-ovr-service');ovrSel.replaceChildren();
-  for(const s of services)ovrSel.append(new Option(`${s.category} · ${s.name}`,s.id));
-  editingOverrides=member?serviceOverrides.filter(o=>o.staffId===member.id).map(o=>({serviceId:o.serviceId,capabilityLevel:o.capabilityLevel})):[];
-  renderStaffOverridesEditor();
-
+  $('staff-editor-save').textContent=member?'Guardar cambios':'Agregar colaboradora';
   $('staff-editor-save').disabled=false;
   $('staff-editor-modal').showModal();
+  const bodyEl=$('staff-editor-modal').querySelector('.editor-body');
+  if(bodyEl)bodyEl.scrollTop=0;
   $('staff-edit-name').focus();
 }
 
@@ -842,9 +1237,20 @@ function renderTeamPage(){
   grid.replaceChildren();
   const inWrap=$('team-inactive-wrap'),inGrid=$('team-inactive-grid');
   if(inGrid)inGrid.replaceChildren();
-  const actives=staff.filter(m=>m.active);
-  const inactives=staff.filter(m=>!m.active);
+  const q=clean($('team-search')?.value||'').trim();
+  const matchesMember=m=>{
+    if(!q)return true;
+    const rest=m.restWeekday===null||m.restWeekday===undefined?'':WEEKDAYS[m.restWeekday];
+    const hay=`${m.displayName} ${m.shortName} ${ROLE_LABELS[m.role]||m.role} ${rest} ${m.specialtySummary||''} ${summarizeStaffServices(m)}`;
+    return clean(hay).includes(q);
+  };
+  const actives=staff.filter(m=>m.active&&matchesMember(m));
+  const inactives=staff.filter(m=>!m.active&&matchesMember(m));
   const ini=name=>String(name||'T').trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'T';
+
+  if(!actives.length){
+    grid.append(node('p',q?'No encontramos colaboradoras con ese filtro.':'Aún no hay colaboradoras activas.','field-help'));
+  }
 
   actives.forEach((m,i)=>{
     const card=node('article',undefined,'team-member-card');
@@ -921,19 +1327,49 @@ function renderTeamPage(){
 
 $('staff-add-btn').addEventListener('click',()=>openStaffEditor(null));
 $('team-add-btn')?.addEventListener('click',()=>openStaffEditor(null));
+$('team-search')?.addEventListener('input',debounce(renderTeamPage,120));
 $('team-duration-search')?.addEventListener('input',debounce(()=>renderDurationsInto($('team-duration-list'),$('team-duration-search').value,$('team-page-status')),150));
-$('staff-edit-role').addEventListener('change',()=>{
-  const isRec=$('staff-edit-role').value==='reception';
-  $('staff-edit-holds').checked=!isRec;
-  $('staff-capabilities-section').hidden=isRec;
+$('staff-edit-name')?.addEventListener('input',()=>{
+  const val=$('staff-edit-name').value.trim();
+  $('staff-editor-avatar').textContent=staffInitials(val);
+  if(!editingStaffMember)$('staff-editor-title').textContent=val||'Agregar colaboradora';
 });
+for(const b of document.querySelectorAll('[data-staff-role]'))b.addEventListener('click',()=>syncStaffRolePills(b.dataset.staffRole));
+for(const b of document.querySelectorAll('[data-staff-rest]'))b.addEventListener('click',()=>syncStaffRestPills(b.dataset.staffRest));
 $('staff-edit-holds').addEventListener('change',()=>{$('staff-capabilities-section').hidden=!$('staff-edit-holds').checked;});
-$('staff-ovr-add').addEventListener('click',()=>{
-  const sid=$('staff-ovr-service').value,lvl=$('staff-ovr-level').value;
-  if(!sid)return;
-  editingOverrides=editingOverrides.filter(o=>o.serviceId!==sid);
-  editingOverrides.push({serviceId:sid,capabilityLevel:lvl});
-  renderStaffOverridesEditor();
+for(const b of document.querySelectorAll('[data-cat-lvl]'))b.addEventListener('click',()=>{
+  if(!staffSelectedCat)return;
+  const val=b.dataset.catLvl;
+  if(val)staffCatMap.set(staffSelectedCat,val);
+  else staffCatMap.delete(staffSelectedCat);
+  for(const s of services.filter(x=>x.category===staffSelectedCat)){
+    if(val&&staffOvrMap.get(s.id)!=='disabled')staffOvrMap.delete(s.id);
+    if(!val&&staffOvrMap.get(s.id)==='disabled')staffOvrMap.delete(s.id);
+  }
+  renderStaffCapEditor();
+});
+$('staff-svc-filter')?.addEventListener('input',debounce(renderStaffCatPanel,120));
+for(const b of document.querySelectorAll('[data-staff-preset]'))b.addEventListener('click',()=>{
+  const p=b.dataset.staffPreset,lvl=defaultStaffCapLevel(),cats=new Set(catalogCategories());
+  staffOvrMap.clear();
+  if(p==='clear'){staffCatMap.clear();}
+  else if(p==='color_treat'){
+    staffCatMap.clear();
+    for(const c of ['COLOR','TRATAMIENTO','ASESORÍA'])if(cats.has(c))staffCatMap.set(c,lvl);
+  } else if(p==='full_stylist'){
+    staffCatMap.clear();
+    for(const c of ['COLOR','CORTE','QUÍMICO','PEINADO','TRATAMIENTO','ASESORÍA'])if(cats.has(c))staffCatMap.set(c,lvl);
+  } else if(p==='nails_depil'){
+    staffCatMap.clear();
+    for(const c of ['MANOS / PIES','DEPILACION'])if(cats.has(c))staffCatMap.set(c,'primary');
+  }
+  renderStaffCapEditor();
+});
+$('staff-editor-retire')?.addEventListener('click',()=>{
+  if(!editingStaffMember)return;
+  const m=editingStaffMember;
+  $('staff-editor-modal').close();
+  openStaffDelete(m);
 });
 for(const id of ['staff-editor-close','staff-editor-cancel'])$(id).addEventListener('click',()=>$('staff-editor-modal').close());
 $('staff-delete-cancel').addEventListener('click',()=>$('staff-delete-modal').close());
@@ -943,8 +1379,8 @@ $('staff-editor-form').addEventListener('submit',async e=>{
   const btn=$('staff-editor-save');btn.disabled=true;$('staff-editor-error').hidden=true;
   const id=$('staff-edit-id').value;
   const canHold=$('staff-edit-holds').checked;
-  const categories=canHold?[...document.querySelectorAll('[data-staff-cat]')].filter(s=>s.value).map(s=>({category:s.dataset.staffCat,capabilityLevel:s.value})):[];
-  const serviceOverridesPayload=canHold?editingOverrides:[];
+  const categories=canHold?[...staffCatMap.entries()].map(([category,capabilityLevel])=>({category,capabilityLevel})):[];
+  const serviceOverridesPayload=canHold?[...staffOvrMap.entries()].map(([serviceId,capabilityLevel])=>({serviceId,capabilityLevel})):[];
   const profile={
     displayName:$('staff-edit-name').value.trim(),
     shortName:$('staff-edit-short').value.trim(),
@@ -1051,17 +1487,30 @@ for(const btn of document.querySelectorAll('[data-agenda-scope]'))btn.addEventLi
 $('agenda-day-notes').addEventListener('input',()=>{noteDirty=true;$('agenda-note-status').textContent='Cambios sin guardar';});
 $('agenda-save-notes').addEventListener('click',async()=>{const b=$('agenda-save-notes'),savedDate=date,notes=$('agenda-day-notes').value;b.disabled=true;try{await api('/api/agenda/notes',{method:'PATCH',body:JSON.stringify({date:savedDate,notes})});if(date===savedDate&&$('agenda-day-notes').value===notes){noteDirty=false;$('agenda-note-status').textContent='Notas guardadas.';}}catch(e){if(date===savedDate)$('agenda-note-status').textContent=e.message;}finally{b.disabled=false;}});
 $('agenda-hours-form').addEventListener('submit',async e=>{e.preventDefault();const b=$('agenda-save-hours');b.disabled=true;try{preferences=await api('/api/agenda/preferences',{method:'PATCH',body:JSON.stringify({openTime:$('agenda-open').value,closeTime:$('agenda-close').value,weekdays:[...document.querySelectorAll('[data-agenda-weekday]:checked')].map(x=>Number(x.value))})});message('Horario guardado. Se aplicará a las próximas citas.');const hoursTxt=`Horario del salón: ${preferences.openTime} a ${preferences.closeTime}`;$('agenda-hours-label').textContent=hoursTxt;if($('agenda-hours-readonly'))$('agenda-hours-readonly').textContent=hoursTxt;}catch(e){message(e.message,true);}finally{b.disabled=false;}});
+$('admin-alerts-btn')?.addEventListener('click',()=>{
+  if(location.hash!=='#agenda')location.hash='#agenda';
+  setTimeout(()=>$('admin-alerts-panel')?.scrollIntoView({behavior:'smooth',block:'nearest'}),120);
+});
 window.addEventListener('beforeunload',e=>{if(noteDirty){e.preventDefault();e.returnValue='';}});
 window.addEventListener('touche:data-changed',()=>{bootstrapped=false;});
-window.addEventListener('touche:session-ready',()=>{if(staff.length){scopeInitialized=false;render();if(location.hash==='#equipo')renderTeamPage();}});
+window.addEventListener('touche:profile-updated',()=>{bootstrapped=false;if(location.hash==='#agenda'||location.hash==='#equipo')load(true);});
+window.addEventListener('touche:session-ready',()=>{
+  if(store.isAdmin())loadAdminAlerts();
+  else renderAdminAlerts();
+  if(staff.length){scopeInitialized=false;render();if(location.hash==='#equipo')renderTeamPage();}
+});
 window.addEventListener('hashchange',()=>{
-  if(location.hash==='#agenda')load();
+  if(location.hash==='#agenda'){load();if(store.isAdmin())loadAdminAlerts();}
   else if(location.hash==='#equipo'){if(bootstrapped)renderTeamPage();load();}
 });
 if(location.hash==='#agenda')load();
 else if(location.hash==='#equipo')load();
+if(store.isAdmin())loadAdminAlerts();
 setInterval(()=>{
   if(!document.hidden&&!loading&&location.hash==='#agenda'&&!$('appointment-editor')?.open&&!$('staff-editor-modal')?.open&&!$('exception-modal')?.open){
     load(false);
   }
 },60000);
+setInterval(()=>{
+  if(!document.hidden&&store.isAdmin())loadAdminAlerts();
+},20000);

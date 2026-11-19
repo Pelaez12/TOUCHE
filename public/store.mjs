@@ -6,6 +6,7 @@ export function activePage(){
   const h=location.hash;
   if(h==='#agenda')return 'agenda';
   if(h==='#equipo')return 'team';
+  if(h==='#perfil')return 'profile';
   if(h==='#retorno'||h==='#panel')return 'return';
   if(h==='#revision'||h==='#quality')return 'quality';
   if(h==='#cuentas')return 'accounts';
@@ -21,6 +22,13 @@ export const store={
   historyDirty:true,
   clientsDirty:true,
   isAdmin(){return this.user?.role==='admin';},
+  accessScope(){
+    if(!this.user)return 'admin';
+    if(this.user.accessScope)return this.user.accessScope;
+    if(this.user.role==='admin')return 'admin';
+    return this.user.staffRole==='reception'?'reception':'stylist';
+  },
+  isStylist(){return this.accessScope()==='stylist';},
   setBootstrap({clients,services,currentUser}){
     if(Array.isArray(clients))this.clients=clients;
     if(Array.isArray(services))this.services=services;
@@ -31,6 +39,7 @@ export const store={
     this.user=user;
     if(typeof document!=='undefined'){
       document.body.dataset.role=user.role||'collaborator';
+      document.body.dataset.scope=this.accessScope();
       window.dispatchEvent(new CustomEvent('touche:session-ready',{detail:{user}}));
     }
     return user;

@@ -46,10 +46,12 @@ function createDbWithAccounts(){
   const hash=createHash('sha256').update(salt+'\0'+LEGACY_ADMIN_KEY).digest('hex');
   sqlite.prepare("INSERT INTO web_access_settings(id,key_hash,salt) VALUES ('admin',?,?)").run(hash,salt);
   sqlite.prepare("INSERT INTO services(id,name,category,price_cents,active) VALUES ('catalog-60','TINTE RAIZ 1','COLOR',12000,1)").run();
+  sqlite.prepare("INSERT INTO services(id,name,category,price_cents,active) VALUES ('catalog-13','MANICURE CLASICA','MANOS / PIES',2500,1)").run();
   sqlite.prepare("INSERT INTO clients(id,full_name,dni,phone,in_directory) VALUES ('c-active','Clienta Activa','12345678','987654321',1)").run();
   sqlite.prepare("INSERT INTO clients(id,full_name,dni,phone,in_directory,archived_at) VALUES ('c-arch','Clienta Archivada','87654321','987654322',1,'2026-10-01T00:00:00Z')").run();
   sqlite.exec(readFileSync(new URL('../migrations/0009_internal_operations.sql',import.meta.url),'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0010_internal_accounts.sql',import.meta.url),'utf8'));
+  sqlite.exec(readFileSync(new URL('../migrations/0011_stylist_alerts_and_profile.sql',import.meta.url),'utf8'));
   return {sqlite,db:makeAccurateD1(sqlite)};
 }
 
@@ -195,4 +197,155 @@ test('PWA manifest, service worker, icons, and security headers are served clean
   const csp=loginRes.headers.get('content-security-policy')||'';
   assert.match(csp,/worker-src 'self'/);
   assert.match(csp,/manifest-src 'self'/);
+});
+
+test('stylist isolation, arrival alerts (admin-only), and DB-validated self profile', async ()=>{
+  const {db}=createDbWithAccounts();
+  const adminLogin=await req(db,'/api/login',{method:'POST',body:{email:'admin@touche.pe',password:LEGACY_ADMIN_KEY}});
+  const adminCookie=adminLogin.cookie;
+  assert.equal(adminLogin.body.user.accessScope,'admin');
+
+  // Activate Miriam (stylist) & Silvia (reception)
+  assert.equal((await req(db,'/api/accounts/acct-miriam',{method:'PATCH',cookie:adminCookie,body:{password:'123456789',active:true}})).status,200);
+  assert.equal((await req(db,'/api/accounts/acct-silvia',{method:'PATCH',cookie:adminCookie,body:{password:'123456789',active:true}})).status,200);
+
+  // Admin books one appointment for Miriam and one for Maritza on Thursday 2026-11-26
+  const apptMiriam=await req(db,'/api/appointments',{method:'POST',cookie:adminCookie,body:{clientId:'c-active',serviceId:'catalog-60',staffId:'staff-miriam',assignmentMode:'requested',date:'2026-11-26',time:'10:00',duration:90}});
+  assert.equal(apptMiriam.status,201);
+  const apptMaritza=await req(db,'/api/appointments',{method:'POST',cookie:adminCookie,body:{clientId:'c-active',serviceId:'catalog-60',staffId:'staff-maritza',assignmentMode:'requested',date:'2026-11-26',time:'12:00',duration:90}});
+  assert.equal(apptMaritza.status,201);
+  // Admin checks in Maritza first so we verify Miriam cannot see Maritza's arrival
+  assert.equal((await req(db,'/api/agenda/shifts',{method:'PUT',cookie:adminCookie,body:{day:'2026-11-26',shifts:[{staffId:'staff-maritza',turnOrder:1,status:'present'}]}})).status,200);
+
+  // Miriam logs in -> accessScope === 'stylist'
+  const miriamLogin=await req(db,'/api/login',{method:'POST',body:{email:'miriam@touche.pe',password:'123456789'}});
+  assert.equal(miriamLogin.status,200);
+  assert.equal(miriamLogin.body.user.accessScope,'stylist');
+  const miriamCookie=miriamLogin.cookie;
+
+  // Strict stylist restrictions: cannot see clients, staff, shifts, alerts, or create appointments
+  assert.equal((await req(db,'/api/clients',{cookie:miriamCookie})).status,403);
+  assert.equal((await req(db,'/api/clients',{method:'POST',cookie:miriamCookie,body:{name:'Test',dni:'11112222'}})).status,403);
+  assert.equal((await req(db,'/api/staff',{cookie:miriamCookie})).status,403);
+  assert.equal((await req(db,'/api/agenda/shifts',{method:'PUT',cookie:miriamCookie,body:{day:'2026-11-26',shifts:[]}})).status,403);
+  assert.equal((await req(db,'/api/alerts',{cookie:miriamCookie})).status,403);
+  assert.equal((await req(db,'/api/appointments',{method:'POST',cookie:miriamCookie,body:{clientId:'c-active',serviceId:'catalog-60',staffId:'staff-miriam',assignmentMode:'requested',date:'2026-11-26',time:'14:00',duration:60}})).status,403);
+
+  // Miriam's /api/agenda returns ONLY her own staff, own appointment (without phone), no other shifts, and 0 clients
+  const myAgenda=await req(db,'/api/agenda?date=2026-11-26&bootstrap=1',{cookie:miriamCookie});
+  assert.equal(myAgenda.status,200);
+  assert.equal(myAgenda.body.clients.length,0);
+  assert.equal(myAgenda.body.staff.length,1);
+  assert.equal(myAgenda.body.staff[0].id,'staff-miriam');
+  assert.equal(myAgenda.body.dailyShifts.length,0); // Maritza's arrival is hidden!
+  assert.equal(myAgenda.body.appointments.length,1);
+  assert.equal(myAgenda.body.appointments[0].id,apptMiriam.body.id);
+  assert.equal(myAgenda.body.appointments[0].clientPhone,null);
+
+  // Miriam marks ONLY her own arrival
+  const myArr=await req(db,'/api/agenda/my-arrival',{method:'POST',cookie:miriamCookie,body:{day:'2026-11-26'}});
+  assert.equal(myArr.status,200);
+  assert.equal(myArr.body.shift.staffId,'staff-miriam');
+
+  // Miriam CANNOT mark arrival on Maritza's appointment (403)
+  assert.equal((await req(db,`/api/appointments/${apptMaritza.body.id}/arrival`,{method:'POST',cookie:miriamCookie,body:{status:'not_arrived'}})).status,403);
+
+  // Miriam clicks "No llegó" & "Recordatorio" on her own appointment -> creates Admin-only alerts
+  const missed=await req(db,`/api/appointments/${apptMiriam.body.id}/arrival`,{method:'POST',cookie:miriamCookie,body:{status:'not_arrived'}});
+  assert.equal(missed.status,200);
+  assert.equal(missed.body.title,'ALERTA: No llegó el cliente — Recordarle');
+  const remAlert=await req(db,`/api/appointments/${apptMiriam.body.id}/alert-reminder`,{method:'POST',cookie:miriamCookie,body:{}});
+  assert.equal(remAlert.status,200);
+
+  // Silvia (reception) CANNOT see Admin alerts (403)
+  const silviaLogin=await req(db,'/api/login',{method:'POST',body:{email:'silvia@touche.pe',password:'123456789'}});
+  assert.equal(silviaLogin.body.user.accessScope,'reception');
+  assert.equal((await req(db,'/api/alerts',{cookie:silviaLogin.cookie})).status,403);
+
+  // ONLY Admin sees both alerts (with client phone to contact via WhatsApp)
+  const adminAlerts=await req(db,'/api/alerts?status=unread',{cookie:adminCookie});
+  assert.equal(adminAlerts.status,200);
+  assert.equal(adminAlerts.body.unreadCount,2);
+  assert.equal(adminAlerts.body.alerts[0].clientPhone,'987654321');
+  assert.ok(adminAlerts.body.alerts.some(a=>a.title==='ALERTA: No llegó el cliente — Recordarle'));
+
+  // Miriam marks "Llegó" -> auto-resolves client_not_arrived alert; Admin resolves the other
+  const arrived=await req(db,`/api/appointments/${apptMiriam.body.id}/arrival`,{method:'POST',cookie:miriamCookie,body:{status:'arrived'}});
+  assert.equal(arrived.status,200);
+  assert.equal(arrived.body.arrivalStatus,'arrived');
+  const afterArrived=await req(db,'/api/alerts?status=unread',{cookie:adminCookie});
+  assert.equal(afterArrived.body.unreadCount,1);
+  assert.equal((await req(db,`/api/alerts/${afterArrived.body.alerts[0].id}/resolve`,{method:'POST',cookie:adminCookie,body:{}})).status,200);
+  assert.equal((await req(db,'/api/alerts?status=unread',{cookie:adminCookie})).body.unreadCount,0);
+
+  // Self-service Profile (#perfil): loads real DB catalog, rejects invented tags, accepts real DB tags
+  const prof=await req(db,'/api/profile',{cookie:miriamCookie});
+  assert.equal(prof.status,200);
+  assert.ok(prof.body.catalog.categories.some(c=>c.category==='COLOR'));
+  assert.ok(prof.body.catalog.services.some(s=>s.id==='catalog-13'));
+
+  // Reject invented category & invented service
+  assert.equal((await req(db,'/api/profile',{method:'PATCH',cookie:miriamCookie,body:{displayName:'Miriam Pecho',categories:[{category:'INVENTADO',capabilityLevel:'primary'}]}})).status,400);
+  assert.equal((await req(db,'/api/profile',{method:'PATCH',cookie:miriamCookie,body:{displayName:'Miriam Pecho',serviceOverrides:[{serviceId:'no-existe',capabilityLevel:'primary'}]}})).status,400);
+
+  // Accept real DB category + updated full name + description
+  const upd=await req(db,'/api/profile',{method:'PATCH',cookie:miriamCookie,body:{
+    displayName:'Miriam Pecho Ramos',
+    shortName:'Miriam',
+    specialtySummary:'Especialista en color y manicure',
+    categories:[{category:'COLOR',capabilityLevel:'primary'},{category:'MANOS / PIES',capabilityLevel:'primary'}],
+    serviceOverrides:[]
+  }});
+  assert.equal(upd.status,200);
+  const profAfter=await req(db,'/api/profile',{cookie:miriamCookie});
+  assert.equal(profAfter.body.account.displayName,'Miriam Pecho Ramos');
+  assert.equal(profAfter.body.staff.displayName,'Miriam Pecho Ramos');
+  assert.equal(profAfter.body.categories.length,2);
+
+  // Client history + automatic interest categorization (treatments + new agenda service)
+  const {sqlite:sq}=createDbWithAccounts();
+  assert.ok(sq);
+});
+
+test('client history endpoint returns exact service, date, time, and automatic interests from history + new agenda services', async ()=>{
+  const {sqlite,db}=createDbWithAccounts();
+  const adminLogin=await req(db,'/api/login',{method:'POST',body:{email:'admin@touche.pe',password:LEGACY_ADMIN_KEY}});
+  const adminCookie=adminLogin.cookie;
+  assert.equal((await req(db,'/api/accounts/acct-miriam',{method:'PATCH',cookie:adminCookie,body:{password:'123456789',active:true}})).status,200);
+  const miriamCookie=(await req(db,'/api/login',{method:'POST',body:{email:'miriam@touche.pe',password:'123456789'}})).cookie;
+
+  // Historical treatments (2x SHADES -> primary interest "Shades", 1x TRATAMIENTO)
+  sqlite.prepare("INSERT INTO treatments(id,client_id,service_name,category,performed_on) VALUES ('tr-1','c-active','SHADES','SHADES','2026-08-10')").run();
+  sqlite.prepare("INSERT INTO treatments(id,client_id,service_name,category,performed_on) VALUES ('tr-2','c-active','SHADES','SHADES','2026-09-15')").run();
+  sqlite.prepare("INSERT INTO treatments(id,client_id,service_name,category,performed_on) VALUES ('tr-3','c-active','TRATAMIENTO','TRATAMIENTO','2026-10-01')").run();
+
+  // New brand-new service in Agenda (not in predefined labels -> auto-creates its own interest!)
+  sqlite.prepare("INSERT INTO services(id,name,category,price_cents,active) VALUES ('svc-new-spa','SPA CAPILAR DETOX','SPA',9500,1)").run();
+  sqlite.prepare("INSERT INTO staff_category_capabilities(staff_id,category,capability_level) VALUES ('staff-miriam','SPA','primary')").run();
+  const appt=await req(db,'/api/appointments',{method:'POST',cookie:adminCookie,body:{clientId:'c-active',serviceId:'svc-new-spa',staffId:'staff-miriam',assignmentMode:'requested',date:'2026-11-26',time:'14:30',duration:45}});
+  assert.equal(appt.status,201);
+
+  // Stylist cannot access client history (403)
+  assert.equal((await req(db,'/api/clients/c-active/history',{cookie:miriamCookie})).status,403);
+
+  // GET /api/clients includes automatic interests
+  const list=await req(db,'/api/clients',{cookie:adminCookie});
+  const active=list.body.clients.find(c=>c.id==='c-active');
+  assert.equal(active.interests[0].label,'Shades');
+  assert.equal(active.interests[0].primary,true);
+  assert.ok(active.interests.some(i=>i.label==='Spa Capilar Detox'));
+
+  // GET /api/clients/:id/history returns exact date, clock time for agenda, and automatic interests
+  const hist=await req(db,'/api/clients/c-active/history',{cookie:adminCookie});
+  assert.equal(hist.status,200);
+  assert.equal(hist.body.visitsCount,3);
+  assert.equal(hist.body.scheduledCount,1);
+  assert.equal(hist.body.interests[0].label,'Shades');
+  assert.equal(hist.body.interests[0].count,2);
+  assert.ok(hist.body.interests.some(i=>i.label==='Spa Capilar Detox'&&i.fromAgenda===true));
+  const agendaItem=hist.body.timeline.find(t=>t.serviceName==='SPA CAPILAR DETOX');
+  assert.equal(agendaItem.date,'2026-11-26');
+  assert.equal(agendaItem.startTime,'14:30');
+  assert.equal(agendaItem.endTime,'15:15');
+  assert.equal(agendaItem.staffName,'Miriam');
 });

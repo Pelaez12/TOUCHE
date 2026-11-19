@@ -92,7 +92,7 @@ async function loadStaffContext(db,monthStart,monthEnd,day){
 }
 
 async function preferences(db){const p=await db.prepare("SELECT open_time,close_time,weekdays_json FROM agenda_preferences WHERE id='salon'").first();return {openTime:p.open_time,closeTime:p.close_time,weekdays:JSON.parse(p.weekdays_json)};}
-const DEFAULT_ACTOR={accountId:'acct-admin',email:'admin@touche.pe',displayName:'Administración Touché',role:'admin',staffId:null};
+const DEFAULT_ACTOR={accountId:'acct-admin',email:'admin@touche.pe',displayName:'Administración Touché',role:'admin',staffId:null,staffRole:null,accessScope:'admin'};
 function auditAgenda(db,actorEmail,id,action,fields,onlyChanged=false){return db.prepare('INSERT INTO audit_log(id,actor,action,entity_type,entity_id,changes_json) SELECT ?,?,?,?,?,?'+(onlyChanged?' WHERE changes()>0':'')).bind(crypto.randomUUID(),actorEmail||'admin@touche.pe',action,'appointment',id,JSON.stringify({fields}));}
 function apptEvent(db,actorEmail,appointmentId,eventType,{prevStarts=null,prevEnds=null,prevStaff=null,nextStarts=null,nextEnds=null,nextStaff=null,note=''}={}){
   return db.prepare('INSERT INTO appointment_events(id,appointment_id,event_type,previous_starts_at,previous_ends_at,previous_staff_id,next_starts_at,next_ends_at,next_staff_id,note,actor) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
@@ -101,10 +101,42 @@ function apptEvent(db,actorEmail,appointmentId,eventType,{prevStarts=null,prevEn
 
 export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
   const url=new URL(request.url),path=url.pathname,method=request.method;
-  if(!path.startsWith('/api/agenda')&&!path.startsWith('/api/appointments')&&!path.startsWith('/api/staff')&&!path.startsWith('/api/services'))return null;
+  if(!path.startsWith('/api/agenda')&&!path.startsWith('/api/appointments')&&!path.startsWith('/api/staff')&&!path.startsWith('/api/services')&&!path.startsWith('/api/alerts'))return null;
   const actorEmail=actor?.email||'admin@touche.pe';
   const isAdmin=(actor?.role||'admin')==='admin';
+  const accessScope=actor?.accessScope||(isAdmin?'admin':'stylist');
+  const isStylist=accessScope==='stylist';
   const log=(dbConn,id,action,fields,onlyChanged=false)=>auditAgenda(dbConn,actorEmail,id,action,fields,onlyChanged);
+
+  if(path==='/api/alerts'&&method==='GET'){
+    if(!isAdmin)return response({error:'Solo Administración puede ver las alertas del salón.'},403);
+    const statusFilter=url.searchParams.get('status')||'unread';
+    const where=statusFilter==='all'?'':'WHERE al.status=?';
+    const stmt=db.prepare(`SELECT al.id,al.appointment_id AS appointmentId,al.client_id AS clientId,al.staff_id AS staffId,
+      al.kind,al.title,al.message,al.created_by_email AS createdByEmail,al.created_by_name AS createdByName,
+      al.status,al.created_at AS createdAt,al.resolved_at AS resolvedAt,al.resolved_by AS resolvedBy,
+      c.full_name AS clientName,c.phone AS clientPhone,s.name AS serviceName,a.starts_at AS startsAt,
+      COALESCE(st.short_name,st.display_name,a.assignee) AS staffName
+      FROM admin_alerts al
+      LEFT JOIN appointments a ON a.id=al.appointment_id
+      LEFT JOIN clients c ON c.id=al.client_id
+      LEFT JOIN services s ON s.id=a.service_id
+      LEFT JOIN staff st ON st.id=al.staff_id
+      ${where} ORDER BY al.created_at DESC LIMIT 50`);
+    const rows=statusFilter==='all'?(await stmt.all()).results:(await stmt.bind(statusFilter).all()).results;
+    return response({alerts:rows,unreadCount:rows.filter(r=>r.status==='unread').length});
+  }
+
+  const alertResolveMatch=path.match(/^\/api\/alerts\/([a-zA-Z0-9-]+)\/resolve$/);
+  if(alertResolveMatch&&method==='POST'){
+    if(!isAdmin)return response({error:'Solo Administración puede marcar alertas como atendidas.'},403);
+    const alertId=alertResolveMatch[1],now=new Date().toISOString();
+    const res=await db.batch([
+      db.prepare("UPDATE admin_alerts SET status='resolved',resolved_at=?,resolved_by=? WHERE id=? AND status='unread'").bind(now,actorEmail,alertId),
+      log(db,alertId,'resolve-admin-alert',['status'],true)
+    ]);
+    return response({saved:true,resolved:res[0].meta.changes>0});
+  }
 
   if(path==='/api/agenda/preferences'){
     if(method==='GET')return response(await preferences(db));
@@ -116,6 +148,7 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
   }
 
   if(path==='/api/agenda/notes'&&method==='PATCH'){
+    if(isStylist)return response({error:'Solo Recepción o Administración puede editar las notas del salón.'},403);
     let p;try{p=await readBody(request);if(!validDay(p.date)||typeof p.notes!=='string'||p.notes.length>6000)throw Error('Fecha inválida o notas mayores a 6000 caracteres.');}catch(e){return response({error:e.message},400);}
     const now=new Date().toISOString();await db.batch([db.prepare('INSERT INTO agenda_day_notes(day,notes,updated_at) VALUES (?,?,?) ON CONFLICT(day) DO UPDATE SET notes=excluded.notes,updated_at=excluded.updated_at').bind(p.date,p.notes.trim(),now),log(db,p.date,'update-day-notes',['notes'])]);return response({saved:true});
   }
@@ -130,6 +163,7 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
         a.service_id AS serviceId,s.name AS serviceName,s.category AS serviceCategory,
         a.staff_id AS staffId,COALESCE(st.short_name,st.display_name,a.assignee) AS staffName,a.assignee,
         a.assignment_mode AS assignmentMode,a.confirmation_status AS confirmationStatus,
+        a.arrival_status AS arrivalStatus,a.arrived_at AS arrivedAt,
         a.reminded_day_before_at AS remindedDayBeforeAt,a.reminded_same_day_at AS remindedSameDayAt,
         a.confirmed_at AS confirmedAt,a.reschedule_count AS rescheduleCount,a.cancel_reason AS cancelReason,
         a.starts_at AS startsAt,a.ends_at AS endsAt,a.status,a.notes,c.archived_at AS clientArchived,
@@ -146,36 +180,59 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
     ];
     if(bootstrap){
       stmts.push(
-        db.prepare(`SELECT c.id,c.full_name AS name,c.dni,c.phone,
-          (SELECT MAX(performed_on) FROM treatments WHERE client_id=c.id) AS lastVisit,
-          (SELECT service_name FROM treatments WHERE client_id=c.id ORDER BY performed_on DESC,rowid DESC LIMIT 1) AS lastService,
-          (SELECT technical_notes FROM treatments WHERE client_id=c.id AND technical_notes<>'' ORDER BY performed_on DESC,rowid DESC LIMIT 1) AS lastTechNote,
-          (SELECT COUNT(*) FROM appointments WHERE client_id=c.id AND status='no_show') AS noShowCount
-          FROM clients c WHERE c.archived_at IS NULL ORDER BY c.full_name COLLATE NOCASE`),
+        isStylist
+          ? db.prepare('SELECT 1 WHERE 0')
+          : db.prepare(`SELECT c.id,c.full_name AS name,c.dni,c.phone,
+              (SELECT MAX(performed_on) FROM treatments WHERE client_id=c.id) AS lastVisit,
+              (SELECT service_name FROM treatments WHERE client_id=c.id ORDER BY performed_on DESC,rowid DESC LIMIT 1) AS lastService,
+              (SELECT technical_notes FROM treatments WHERE client_id=c.id AND technical_notes<>'' ORDER BY performed_on DESC,rowid DESC LIMIT 1) AS lastTechNote,
+              (SELECT COUNT(*) FROM appointments WHERE client_id=c.id AND status='no_show') AS noShowCount
+              FROM clients c WHERE c.archived_at IS NULL ORDER BY c.full_name COLLATE NOCASE`),
         db.prepare('SELECT id,name,category,price_cents AS priceCents,duration_minutes AS durationMinutes,duration_max_minutes AS durationMaxMinutes FROM services WHERE active=1 ORDER BY category,name COLLATE NOCASE')
       );
     }
     const res=await db.batch(stmts);
     const p=res[2].results[0];
+    const allStaff=res[3].results.map(s=>({...s,active:!!s.active,canHoldAppointments:!!s.canHoldAppointments}));
+    const myStaffId=actor?.staffId||null;
     const payload={
-      appointments:res[0].results,
-      dayNote:res[1].results[0]||{notes:'',updatedAt:null},
+      appointments:isStylist
+        ? res[0].results.filter(a=>myStaffId&&a.staffId===myStaffId).map(a=>({...a,clientPhone:null,clientDni:null}))
+        : res[0].results,
+      dayNote:isStylist?{notes:'',updatedAt:null}:(res[1].results[0]||{notes:'',updatedAt:null}),
       preferences:{openTime:p.open_time,closeTime:p.close_time,weekdays:JSON.parse(p.weekdays_json)},
-      staff:res[3].results.map(s=>({...s,active:!!s.active,canHoldAppointments:!!s.canHoldAppointments})),
-      categoryCapabilities:res[4].results,
-      serviceOverrides:res[5].results,
-      exceptions:res[6].results,
-      dailyShifts:res[7].results
+      staff:isStylist?allStaff.filter(s=>myStaffId&&s.id===myStaffId):allStaff,
+      categoryCapabilities:isStylist?res[4].results.filter(c=>myStaffId&&c.staffId===myStaffId):res[4].results,
+      serviceOverrides:isStylist?res[5].results.filter(o=>myStaffId&&o.staffId===myStaffId):res[5].results,
+      exceptions:isStylist?res[6].results.filter(e=>myStaffId&&e.staffId===myStaffId):res[6].results,
+      dailyShifts:isStylist?res[7].results.filter(s=>myStaffId&&s.staffId===myStaffId):res[7].results
     };
     if(bootstrap){
-      payload.clients=res[8].results;
+      payload.clients=isStylist?[]:res[8].results;
       payload.services=res[9].results;
-      payload.currentUser={id:actor?.accountId||'acct-admin',email:actorEmail,displayName:actor?.displayName||'Administración Touché',role:actor?.role||'admin',staffId:actor?.staffId??null};
+      payload.currentUser={id:actor?.accountId||'acct-admin',email:actorEmail,displayName:actor?.displayName||'Administración Touché',role:actor?.role||'admin',staffId:myStaffId,staffRole:actor?.staffRole||null,accessScope};
     }
     return response(payload);
   }
 
+  if(path==='/api/agenda/my-arrival'&&method==='POST'){
+    if(!actor?.staffId)return response({error:'Tu cuenta no está vinculada a una ficha de estilista.'},400);
+    let body={};try{if(request.headers.get('content-type')?.includes('application/json'))body=await readBody(request);}catch{}
+    const day=body?.day||new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date());
+    if(!validDay(day))return response({error:'Fecha no válida.'},400);
+    const existingShift=await db.prepare('SELECT day,staff_id AS staffId,turn_order AS turnOrder,checked_in_at AS checkedInAt,status FROM staff_daily_shifts WHERE day=? AND staff_id=?').bind(day,actor.staffId).first();
+    if(existingShift&&existingShift.status==='present')return response({saved:true,shift:existingShift});
+    const maxRow=await db.prepare("SELECT COALESCE(MAX(turn_order),0) AS m FROM staff_daily_shifts WHERE day=? AND status='present'").bind(day).first();
+    const nextOrder=(maxRow?.m||0)+1,now=new Date().toISOString();
+    await db.batch([
+      db.prepare(`INSERT INTO staff_daily_shifts(day,staff_id,turn_order,checked_in_at,status,updated_at) VALUES (?,?,?,?,'present',?) ON CONFLICT(day,staff_id) DO UPDATE SET turn_order=excluded.turn_order,checked_in_at=excluded.checked_in_at,status='present',updated_at=excluded.updated_at`).bind(day,actor.staffId,nextOrder,now,now),
+      log(db,day,'my-arrival-checkin',[actor.staffId])
+    ]);
+    return response({saved:true,shift:{day,staffId:actor.staffId,turnOrder:nextOrder,checkedInAt:now,status:'present'}});
+  }
+
   if(path==='/api/agenda/shifts'&&method==='PUT'){
+    if(isStylist)return response({error:'No puedes ver ni marcar la llegada de otras colaboradoras. Usa «Marcar mi llegada».'},403);
     let body;try{body=await readBody(request);}catch(e){return response({error:e.message},400);}
     if(!validDay(body?.day)||!Array.isArray(body?.shifts))return response({error:'Envía una fecha válida y el orden de llegada del equipo.'},400);
     const seen=new Set(),now=new Date().toISOString();
@@ -198,6 +255,7 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
   }
 
   if(path==='/api/agenda/assign-turn'&&method==='POST'){
+    if(isStylist)return response({error:'Solo Recepción o Administración puede asignar citas por turno.'},403);
     let body;try{body=await readBody(request);}catch(e){return response({error:e.message},400);}
     const id=body?.appointmentId;
     if(typeof id!=='string'||!id)return response({error:'Indica la cita a asignar.'},400);
@@ -229,6 +287,7 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
   const tierForRole=r=>r==='reception'?'support':r==='junior_stylist_assistant'?'junior':'senior';
 
   if(path==='/api/staff'&&method==='GET'){
+    if(isStylist)return response({error:'Solo Recepción o Administración puede ver los datos del resto del equipo.'},403);
     const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date());
     const start=today.slice(0,7)+'-01',next=new Date(start+'T12:00:00Z');next.setUTCMonth(next.getUTCMonth()+1);
     const ctx=await loadStaffContext(db,start,next.toISOString().slice(0,10),today);
@@ -441,11 +500,12 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
     return response({saved:true,id,durationMinutes:dMin,durationMaxMinutes:dMax});
   }
 
-  const match=path.match(/^\/api\/appointments\/([a-zA-Z0-9-]+)(\/(cancel|complete|no-show|confirm|remind|events))?$/),id=match?.[1];
+  const match=path.match(/^\/api\/appointments\/([a-zA-Z0-9-]+)(\/(cancel|complete|no-show|confirm|remind|arrival|alert-reminder|events))?$/),id=match?.[1];
   const existing=id?await db.prepare('SELECT * FROM appointments WHERE id=?').bind(id).first():null;
   if(id&&!existing)return response({error:'La cita no existe.'},404);
 
   if(match?.[3]==='events'&&method==='GET'){
+    if(isStylist&&existing.staff_id!==actor?.staffId)return response({error:'Solo puedes consultar tus propias citas.'},403);
     const events=(await db.prepare(`SELECT e.id,e.event_type AS eventType,e.previous_starts_at AS previousStartsAt,e.previous_ends_at AS previousEndsAt,e.previous_staff_id AS previousStaffId,e.next_starts_at AS nextStartsAt,e.next_ends_at AS nextEndsAt,e.next_staff_id AS nextStaffId,e.note,e.actor,e.created_at AS createdAt FROM appointment_events e WHERE e.appointment_id=? ORDER BY e.created_at DESC`).bind(id).all()).results;
     return response({events});
   }
@@ -456,7 +516,53 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
     const now=new Date().toISOString();
     let body={};try{if(request.headers.get('content-type')?.includes('application/json'))body=await readBody(request);}catch{}
 
+    if(action==='arrival'){
+      if(isStylist&&existing.staff_id!==actor?.staffId)return response({error:'Solo puedes marcar asistencia en tus propias citas.'},403);
+      const arrivalStatus=body?.status==='arrived'?'arrived':body?.status==='not_arrived'?'not_arrived':null;
+      if(!arrivalStatus)return response({error:'Indica si la clienta llegó o no llegó.'},400);
+      const note=String(body?.note||'').trim().slice(0,300);
+      const meta=await db.prepare(`SELECT c.full_name AS clientName,s.name AS serviceName,COALESCE(st.short_name,st.display_name,a.assignee) AS staffName,a.starts_at AS startsAt FROM appointments a JOIN clients c ON c.id=a.client_id JOIN services s ON s.id=a.service_id LEFT JOIN staff st ON st.id=a.staff_id WHERE a.id=?`).bind(id).first();
+      if(arrivalStatus==='arrived'){
+        await db.batch([
+          db.prepare("UPDATE appointments SET arrival_status='arrived',arrived_at=?,updated_at=? WHERE id=? AND status='scheduled'").bind(now,now,id),
+          db.prepare("UPDATE admin_alerts SET status='resolved',resolved_at=?,resolved_by=? WHERE appointment_id=? AND kind='client_not_arrived' AND status='unread'").bind(now,actorEmail,id),
+          log(db,id,'client-arrived',['arrival_status','arrived_at'],true)
+        ]);
+        return response({saved:true,arrivalStatus:'arrived',arrivedAt:now});
+      }
+      const alertId='alert-'+crypto.randomUUID();
+      const time=meta?.startsAt?.slice(11,16)||'';
+      const title='ALERTA: No llegó el cliente — Recordarle';
+      const msg=`${meta?.clientName||'Clienta'} (${meta?.serviceName||'Servicio'}, ${time}) aún no llega con ${meta?.staffName||actor?.displayName||'la estilista'}. Recordarle por WhatsApp o llamar.`+(note?` Nota: ${note}`:'');
+      await db.batch([
+        db.prepare("UPDATE appointments SET arrival_status='not_arrived',updated_at=? WHERE id=? AND status='scheduled'").bind(now,id),
+        db.prepare(`INSERT INTO admin_alerts(id,appointment_id,client_id,staff_id,kind,title,message,created_by_email,created_by_name,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,'unread',?)`)
+          .bind(alertId,id,existing.client_id,existing.staff_id,'client_not_arrived',title,msg,actorEmail,actor?.displayName||actorEmail,now),
+        log(db,id,'client-not-arrived',['arrival_status'],true)
+      ]);
+      return response({saved:true,arrivalStatus:'not_arrived',alertId,title});
+    }
+
+    if(action==='alert-reminder'){
+      if(isStylist&&existing.staff_id!==actor?.staffId)return response({error:'Solo puedes enviar recordatorios sobre tus propias citas.'},403);
+      const note=String(body?.note||'').trim().slice(0,300);
+      const meta=await db.prepare(`SELECT c.full_name AS clientName,s.name AS serviceName,COALESCE(st.short_name,st.display_name,a.assignee) AS staffName,a.starts_at AS startsAt FROM appointments a JOIN clients c ON c.id=a.client_id JOIN services s ON s.id=a.service_id LEFT JOIN staff st ON st.id=a.staff_id WHERE a.id=?`).bind(id).first();
+      const alertId='alert-'+crypto.randomUUID();
+      const time=meta?.startsAt?.slice(11,16)||'';
+      const title=existing.arrival_status==='not_arrived'
+        ?'ALERTA: No llegó el cliente — Recordarle'
+        :'ALERTA: Recordar cita al cliente';
+      const msg=`${meta?.staffName||actor?.displayName||'Estilista'} solicita recordar la cita de ${meta?.clientName||'clienta'} (${meta?.serviceName||'servicio'}, ${time}).`+(note?` Nota: ${note}`:'');
+      await db.batch([
+        db.prepare(`INSERT INTO admin_alerts(id,appointment_id,client_id,staff_id,kind,title,message,created_by_email,created_by_name,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,'unread',?)`)
+          .bind(alertId,id,existing.client_id,existing.staff_id,'client_reminder_needed',title,msg,actorEmail,actor?.displayName||actorEmail,now),
+        log(db,id,'request-client-reminder',['alert'])
+      ]);
+      return response({saved:true,alertId,title});
+    }
+
     if(action==='remind'){
+      if(isStylist)return response({error:'Usa el botón Recordatorio para avisar a Administración.'},403);
       const moment=body?.moment==='same_day'?'same_day':'day_before';
       const statusVal=moment==='same_day'?'reminded_same_day':'reminded_day_before';
       const col=moment==='same_day'?'reminded_same_day_at':'reminded_day_before_at';
@@ -469,6 +575,7 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
     }
 
     if(action==='confirm'){
+      if(isStylist)return response({error:'Solo Recepción o Administración puede confirmar citas.'},403);
       await db.batch([
         db.prepare(`UPDATE appointments SET confirmation_status='confirmed',confirmed_at=?,updated_at=? WHERE id=? AND status='scheduled'`).bind(now,now,id),
         apptEvent(db,actorEmail,id,'confirmed',{note:String(body?.note||'Confirmada por clienta').slice(0,300)}),
@@ -478,6 +585,7 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
     }
 
     if(action==='no-show'){
+      if(isStylist)return response({error:'Usa No llegó para alertar a Administración.'},403);
       const note=String(body?.note||'No se presentó a la cita').trim().slice(0,400);
       const results=await db.batch([
         db.prepare("UPDATE appointments SET status='no_show',cancel_reason=?,updated_at=? WHERE id=? AND status='scheduled'").bind(note,now,id),
@@ -488,6 +596,7 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
     }
 
     if(action==='cancel'){
+      if(isStylist)return response({error:'Solo Recepción o Administración puede cancelar citas.'},403);
       const reason=String(body?.reason||'').trim().slice(0,400);
       const results=await db.batch([
         db.prepare("UPDATE appointments SET status='cancelled',cancel_reason=?,updated_at=? WHERE id=? AND status='scheduled'").bind(reason,now,id),
@@ -498,6 +607,7 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
     }
 
     if(action==='complete'){
+      if(isStylist&&existing.staff_id!==actor?.staffId)return response({error:'Solo puedes finalizar tus propias citas asignadas.'},403);
       if(Date.parse(existing.ends_at)>Date.now())return response({error:'No se puede completar una cita que aún no ha terminado.'},400);
       const techNote=String(body?.technicalNotes||'').trim().slice(0,2000);
       const treatmentId='appointment-'+id;
@@ -512,6 +622,7 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
   }
 
   if((path==='/api/appointments'&&method==='POST')||(match&&!match[3]&&method==='PATCH')){
+    if(isStylist)return response({error:'Solo Recepción o Administración puede agendar o reprogramar citas.'},403);
     if(existing?.status==='completed')return response({error:'Una atención completada conserva su cita y su historial.'},409);
     let p;try{p=validateAppointment(await readBody(request),await preferences(db));}catch(e){return response({error:e.message},400);}
     const client=await db.prepare('SELECT id FROM clients WHERE id=? AND archived_at IS NULL').bind(p.clientId).first();

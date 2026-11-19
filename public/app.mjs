@@ -9,6 +9,65 @@ let historyLimit=40,correctionLimit=30;
 const text = (tag,value,className) => {const e=document.createElement(tag);e.textContent=value;if(className)e.className=className;return e;};
 const td = value => {const cell=document.createElement('td');if(value instanceof Node)cell.append(value);else cell.textContent=value;return cell;};
 function range() {return Object.fromEntries(['start','end','returnStart','returnEnd'].map(id=>[id,$(id).value]));}
+function updateReturnTabCounts(rows){
+  const byKey={
+    all:rows.length,
+    contact:rows.filter(r=>suggestedAction(r).key==='contact').length,
+    pending:rows.filter(r=>!r.returned).length,
+    returned:rows.filter(r=>r.returned).length,
+    missing:rows.filter(r=>suggestedAction(r).key==='missing').length,
+    care:rows.filter(r=>suggestedAction(r).key==='care').length,
+    review:rows.filter(r=>suggestedAction(r).key==='review').length
+  };
+  for(const [k,v] of Object.entries(byKey)){
+    const el=$('tab-count-'+k);
+    if(el)el.textContent=v?`(${v})`:'';
+  }
+}
+function renderServicePills(categories){
+  const wrap=$('return-service-pills');if(!wrap)return;
+  wrap.replaceChildren();
+  const activeCat=$('category').value;
+  for(const cat of ['', ...categories]){
+    const btn=text('button',cat||'Todos los servicios','service-pill-btn'+(cat===activeCat?' selected':''));
+    btn.type='button';
+    btn.setAttribute('aria-pressed',String(cat===activeCat));
+    btn.addEventListener('click',()=>{
+      $('category').value=cat;
+      compute();
+    });
+    wrap.append(btn);
+  }
+}
+function applyReturnPreset(preset){
+  if(!data)return;
+  const latest=data.events.map(e=>e.date).sort().at(-1);
+  if(!latest)return;
+  const d=new Date(latest+'T12:00:00Z'),year=d.getUTCFullYear(),month=d.getUTCMonth();
+  const iso=(y,m,day)=>new Date(Date.UTC(y,m,day,12)).toISOString().slice(0,10);
+  if(preset==='last_month'){
+    $('start').value=iso(year,month-1,1);
+    $('end').value=iso(year,month,0);
+    $('returnStart').value=iso(year,month,1);
+    $('returnEnd').value=latest;
+  } else if(preset==='last_3m'){
+    $('start').value=iso(year,month-5,1);
+    $('end').value=iso(year,month-2,0);
+    $('returnStart').value=iso(year,month-2,1);
+    $('returnEnd').value=latest;
+  } else if(preset==='year_compare'){
+    $('start').value='2025-01-01';
+    $('end').value='2025-12-31';
+    $('returnStart').value='2026-01-01';
+    $('returnEnd').value=latest;
+  }
+  document.querySelectorAll('[data-return-preset]').forEach(b=>{
+    const sel=b.dataset.returnPreset===preset;
+    b.classList.toggle('selected',sel);
+    b.setAttribute('aria-pressed',String(sel));
+  });
+  compute();
+}
 function compute() {
   try {
     current=report(data,range(),$('category').value);
@@ -16,20 +75,32 @@ function compute() {
     $('total').textContent=current.total;
     $('returned').textContent=current.returned;
     $('notReturned').textContent=current.notReturned;
-    $('uncertain').textContent=current.uncertain ? `${current.uncertain} con posibles visitas por revisar` : 'Sin otra visita utilizable en el período';
-    $('rate').textContent=current.rate===null?'Sin base':new Intl.NumberFormat('es-PE',{style:'percent',maximumFractionDigits:1}).format(current.rate);
+    $('uncertain').textContent=current.uncertain ? `${current.uncertain} con fechas por verificar` : 'Toca para ver a quién invitar';
+    const pct=current.rate===null?'Sin base':new Intl.NumberFormat('es-PE',{style:'percent',maximumFractionDigits:1}).format(current.rate);
+    $('rate').textContent=pct;
     $('meter').style.width=`${(current.rate||0)*100}%`;
     $('export').disabled=current.total===0;
     for(const key of ['contact','missing','review','care'])$('todo-'+key).textContent=current.rows.filter(row=>suggestedAction(row).key===key).length;
+    updateReturnTabCounts(current.rows);
+    const readyWa=current.rows.filter(row=>suggestedAction(row).key==='contact').length;
+    const catLabel=$('category').value?` en ${$('category').value}`:'';
+    if($('return-human-summary')){
+      $('return-human-summary').textContent=current.total
+        ?`De ${current.total} clienta${current.total===1?'':'s'} que vinieron${catLabel}, ${current.returned} ya volvieron (${pct}) y ${current.notReturned} aún no regresan.${readyWa?` Tienes ${readyWa} lista${readyWa===1?'':'s'} para invitar por WhatsApp hoy.`:''}`
+        :'No hay visitas registradas en el período elegido. Prueba con «Últimos 3 meses» o «2025 vs 2026».';
+    }
+    const categories=[...new Set(data.events.map(e=>e.category))].sort();
+    renderServicePills(categories);
     limit=30; renderRows();
   } catch(error) {
     $('error').textContent=error.message; $('error').hidden=false;
     current=null;$('export').disabled=true;
     for(const id of ['total','returned','notReturned','rate'])$(id).textContent='—';
     $('meter').style.width='0%';$('rows').replaceChildren();$('more').hidden=true;
-    $('result-count').textContent='Corrige los períodos para calcular el retorno.';
+    $('result-count').textContent='Ajusta las fechas para ver el retorno.';
     $('empty').hidden=true;
     for(const key of ['contact','missing','review','care'])$('todo-'+key).textContent='—';
+    updateReturnTabCounts([]);
   }
 }
 function filtered() {
@@ -39,7 +110,7 @@ function filtered() {
 }
 function renderRows() {
   const rows=filtered();$('rows').replaceChildren();
-  $('result-count').textContent=`${rows.length} clientas · El regreso puede ser por cualquier servicio.`;
+  $('result-count').textContent=`${rows.length} clienta${rows.length===1?'':'s'} en esta vista · El regreso cuenta por cualquier servicio.`;
   $('empty').hidden=rows.length>0;
   $('more').hidden=rows.length<=limit;
   $('more').textContent=`Mostrar más (${Math.min(limit,rows.length)} de ${rows.length})`;
@@ -50,17 +121,19 @@ function renderRows() {
     const name=text('div','');name.append(text('strong',row.name),text('small',row.phone||'Teléfono pendiente'));person.append(name);
     const services=text('div','','last-service-cell');row.lastServices.forEach((service,i)=>{if(i)services.append(' ');services.append(text('span',service,'service'));});
     services.append(text('small',fmt(row.latestVisit),'last-service-date'));
-    const badge=text('span',row.returned?'Regresó':row.uncertain?'Por revisar':'Sin regreso registrado',`badge ${row.returned?'good':row.uncertain?'review':''}`);
-    const view=text('button','Ver ficha','view');view.addEventListener('click',()=>detail(row));
+    const badge=text('span',row.returned?'Regresó':row.uncertain?'Por revisar':'Aún no vuelve',`badge ${row.returned?'good':row.uncertain?'review':''}`);
+    const hist=text('button','Historial','view');hist.type='button';
+    hist.addEventListener('click',()=>window.dispatchEvent(new CustomEvent('touche:open-client-history',{detail:{id:row.id}})));
     const action=suggestedAction(row),next=text('div','','next-action');next.append(text('strong',action.label),text('small',action.description));
     const actions=text('div','','return-actions');
     if(!whatsappPhone(row.phone)){
-      const edit=text('button','Completar teléfono','outline-button');edit.addEventListener('click',()=>editClient(row));actions.append(edit);
+      const edit=text('button','Completar teléfono','outline-button');edit.type='button';edit.addEventListener('click',()=>editClient(row));actions.append(edit);
     }else{
-      const message=text('button','Preparar WhatsApp','message-button');message.addEventListener('click',()=>composeMessage(row));actions.append(message);
+      const message=text('button','Escribir por WhatsApp','message-button');message.type='button';message.addEventListener('click',()=>composeMessage(row));actions.append(message);
     }
-    actions.append(view);
-    tr.append(td(person),td(services),td(String(row.days)),td(badge),td(next),td(actions));$('rows').append(tr);
+    actions.append(hist);
+    const daysText=row.days===0?'Hoy':`Hace ${row.days} día${row.days===1?'':'s'}`;
+    tr.append(td(person),td(services),td(daysText),td(badge),td(next),td(actions));$('rows').append(tr);
   }
 }
 function detail(row) {
@@ -89,10 +162,34 @@ function renderIssues() {
   $('more-issues').textContent=`Mostrar más (${Math.min(issueLimit,data.issues.length)} de ${data.issues.length})`;
 }
 $('period-form').addEventListener('submit',e=>{e.preventDefault();compute();});
+for(const id of ['start','end','returnStart','returnEnd'])$(id).addEventListener('change',()=>{
+  document.querySelectorAll('[data-return-preset]').forEach(b=>{b.classList.remove('selected');b.setAttribute('aria-pressed','false');});
+  if(data)compute();
+});
+for(const b of document.querySelectorAll('[data-return-preset]'))b.addEventListener('click',()=>{
+  $('return-custom-wrap').hidden=true;
+  $('return-toggle-custom')?.setAttribute('aria-expanded','false');
+  applyReturnPreset(b.dataset.returnPreset);
+});
+$('return-toggle-custom')?.addEventListener('click',()=>{
+  const nextHidden=!$('return-custom-wrap').hidden;
+  $('return-custom-wrap').hidden=nextHidden;
+  $('return-toggle-custom').setAttribute('aria-expanded',String(!nextHidden));
+});
 $('category').addEventListener('change',()=>data&&compute());
 $('search').addEventListener('input',debounce(()=>{limit=30;renderRows();},150));
-function selectStatus(value){status=value;document.querySelectorAll('[data-status]').forEach(b=>{b.classList.toggle('selected',b.dataset.status===value);b.setAttribute('aria-pressed',String(b.dataset.status===value));});limit=30;renderRows();}
-for(const button of document.querySelectorAll('[data-next]'))button.addEventListener('click',()=>{selectStatus(button.dataset.next);document.querySelector('.results').scrollIntoView({block:'start'});});
+function selectStatus(value){
+  status=value;
+  document.querySelectorAll('[data-status]').forEach(b=>{b.classList.toggle('selected',b.dataset.status===value);b.setAttribute('aria-pressed',String(b.dataset.status===value));});
+  document.querySelectorAll('[data-next]').forEach(b=>{b.classList.toggle('active-card',b.dataset.next===value);});
+  limit=30;renderRows();
+}
+for(const card of document.querySelectorAll('[data-stat-filter]')){
+  const trigger=()=>{selectStatus(card.dataset.statFilter);document.querySelector('.results').scrollIntoView({behavior:'smooth',block:'start'});};
+  card.addEventListener('click',trigger);
+  card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();trigger();}});
+}
+for(const button of document.querySelectorAll('[data-next]'))button.addEventListener('click',()=>{selectStatus(button.dataset.next);document.querySelector('.results').scrollIntoView({behavior:'smooth',block:'start'});});
 for(const button of document.querySelectorAll('[data-status]'))button.addEventListener('click',()=>{
   selectStatus(button.dataset.status);
 });

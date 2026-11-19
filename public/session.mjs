@@ -11,18 +11,30 @@ const passErr=$('my-password-error');
 function syncRoleUI(user){
   if(!user)return;
   const isAdmin=user.role==='admin';
+  const scope=store.accessScope();
+  const isStylist=scope==='stylist';
   document.body.dataset.role=user.role||'collaborator';
+  document.body.dataset.scope=scope;
   for(const el of document.querySelectorAll('.admin-only')){
     if(el.classList.contains('page'))continue;
     el.hidden=!isAdmin;
   }
+  for(const el of document.querySelectorAll('.desk-only')){
+    if(el.classList.contains('page'))continue;
+    el.hidden=isStylist;
+  }
+  const agendaNav=$('nav-agenda-label');
+  if(agendaNav)agendaNav.textContent=isStylist?'Mi agenda':'Agenda del día';
   const ini=initials(user.displayName);
   if($('user-avatar'))$('user-avatar').textContent=ini;
-  if($('top-avatar')){$('top-avatar').textContent=ini;$('top-avatar').setAttribute('aria-label',`${user.displayName} (${isAdmin?'Administrador':'Colaborador'})`);}
+  if($('top-avatar')){$('top-avatar').textContent=ini;$('top-avatar').setAttribute('aria-label',`${user.displayName} (${isAdmin?'Administrador':scope==='reception'?'Recepción':'Estilista'})`);}
   if($('user-name'))$('user-name').textContent=user.displayName||user.email;
-  if($('user-meta'))$('user-meta').textContent=`${user.email} · ${isAdmin?'Administrador (único)':'Colaborador'}`;
+  if($('user-meta'))$('user-meta').textContent=`${user.email} · ${isAdmin?'Administrador (único)':scope==='reception'?'Recepción':'Estilista'}`;
   if(changePasswordBtn)changePasswordBtn.hidden=!!user.localProxy;
   if(!isAdmin&&['#retorno','#panel','#revision','#quality','#cuentas','#equipo'].includes(location.hash)){
+    location.hash='#agenda';
+  }
+  if(isStylist&&(!location.hash||location.hash==='#clientas')){
     location.hash='#agenda';
   }
 }

@@ -69,6 +69,7 @@ function createMigratedDb(){
   sqlite.prepare("INSERT INTO appointments(id,client_id,service_id,starts_at,ends_at,status,assignee) VALUES ('cc5047d3-af16-4bd5-aef7-ecb76677df58','client-1','catalog-60','2026-11-27T09:00:00-05:00','2026-11-27T11:00:00-05:00','scheduled','colaboradora2')").run();
   sqlite.exec(readFileSync(new URL('../migrations/0009_internal_operations.sql',import.meta.url),'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0010_internal_accounts.sql',import.meta.url),'utf8'));
+  sqlite.exec(readFileSync(new URL('../migrations/0011_stylist_alerts_and_profile.sql',import.meta.url),'utf8'));
   return {sqlite,db:makeAccurateD1(sqlite)};
 }
 

@@ -148,6 +148,25 @@ function checkUpcomingAndNewAppointments(detail){
   }
 }
 
+const seenAdminAlertIds=new Set();
+let adminAlertsPrimed=false;
+
+function handleAdminAlerts(detail){
+  if(!store.isAdmin())return;
+  const alerts=(detail?.alerts||[]).filter(a=>a.status==='unread');
+  for(const al of alerts){
+    if(seenAdminAlertIds.has(al.id))continue;
+    seenAdminAlertIds.add(al.id);
+    if(adminAlertsPrimed||!sessionStorage.getItem('touche_alert_notified_'+al.id)){
+      sessionStorage.setItem('touche_alert_notified_'+al.id,'1');
+      sendNativeNotification(al.title||'ALERTA: No llegó el cliente — Recordarle',al.message||'Revisa la agenda de Administración.','touche-alert-'+al.id);
+      showToast(`${al.title}: ${al.clientName||'Revisar agenda'}`);
+    }
+  }
+  adminAlertsPrimed=true;
+}
+
 window.addEventListener('touche:agenda-updated',e=>checkUpcomingAndNewAppointments(e.detail));
+window.addEventListener('touche:admin-alerts',e=>handleAdminAlerts(e.detail));
 updateNotifButton();
 updateInstallButton();
