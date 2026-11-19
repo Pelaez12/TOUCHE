@@ -71,13 +71,14 @@ function renderAdminAlerts(){
   panel.append(head);
 
   for(const al of unread){
-    const item=node('article',undefined,'admin-alert-card');
+    const isArrival=al.kind==='staff_arrived';
+    const item=node('article',undefined,'admin-alert-card'+(isArrival?' is-arrival':''));
     const info=node('div',undefined,'admin-alert-info');
     info.append(node('strong',al.title),node('p',al.message));
     const when=al.createdAt?new Intl.DateTimeFormat('es-PE',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short',timeZone:'America/Lima'}).format(new Date(al.createdAt)):'';
-    info.append(node('small',`Reportado por ${al.createdByName||al.createdByEmail}${when?' · '+when:''}`));
+    info.append(node('small',`${isArrival?'Registrado por':'Reportado por'} ${al.createdByName||al.createdByEmail}${when?' · '+when:''}`));
     const acts=node('div',undefined,'admin-alert-actions');
-    if(whatsappPhone(al.clientPhone)){
+    if(!isArrival&&whatsappPhone(al.clientPhone)){
       const wa=node('button','Recordar por WhatsApp','tiny-btn message-button');wa.type='button';
       wa.addEventListener('click',()=>{
         const first=String(al.clientName||'').trim().split(/\s+/)[0]||'hola';
@@ -88,7 +89,7 @@ function renderAdminAlerts(){
       });
       acts.append(wa);
     }
-    const done=node('button','Marcar atendida','tiny-btn primary');done.type='button';
+    const done=node('button',isArrival?'Marcar vista':'Marcar atendida','tiny-btn primary');done.type='button';
     done.addEventListener('click',async()=>{
       done.disabled=true;
       try{

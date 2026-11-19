@@ -17,9 +17,69 @@ function showToast(msg){
   setTimeout(()=>$('toast').hidden=true,5000);
 }
 
-async function sendNativeNotification(title,body,tag='touche-agenda'){
+let audioCtx=null;
+function ensureAudio(){
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    if(!Ctx)return null;
+    if(!audioCtx)audioCtx=new Ctx();
+    if(audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});
+    return audioCtx;
+  }catch{return null;}
+}
+for(const ev of ['pointerdown','keydown'])window.addEventListener(ev,()=>{ensureAudio();},{passive:true,once:true});
+
+function playSalonChime(kind='appointment'){
+  try{
+    if(navigator.vibrate){
+      navigator.vibrate(kind==='alert'?[150,80,150]:kind==='arrival'?[90,50,90]:[80]);
+    }
+  }catch{}
+  const ctx=ensureAudio();
+  if(!ctx)return;
+  try{
+    const now=ctx.currentTime+0.02;
+    const patterns={
+      // Campana cálida de bienvenida (llegó estilista)
+      arrival:[
+        {f:523.25,t:0,d:0.24,g:0.13},
+        {f:659.25,t:0.11,d:0.26,g:0.14},
+        {f:783.99,t:0.22,d:0.32,g:0.15},
+        {f:1046.5,t:0.34,d:0.55,g:0.13}
+      ],
+      // Aviso claro de atención (clienta no llegó / recordatorio)
+      alert:[
+        {f:880,t:0,d:0.20,g:0.15},
+        {f:698.46,t:0.16,d:0.20,g:0.14},
+        {f:880,t:0.34,d:0.36,g:0.16}
+      ],
+      // Campana suave de nueva cita en el salón
+      appointment:[
+        {f:783.99,t:0,d:0.22,g:0.12},
+        {f:1046.5,t:0.14,d:0.42,g:0.13}
+      ]
+    };
+    const notes=patterns[kind]||patterns.appointment;
+    for(const n of notes){
+      const osc=ctx.createOscillator(),overtone=ctx.createOscillator(),gain=ctx.createGain();
+      osc.type='sine';osc.frequency.setValueAtTime(n.f,now+n.t);
+      overtone.type='triangle';overtone.frequency.setValueAtTime(n.f*2,now+n.t);
+      const ovGain=ctx.createGain();ovGain.gain.setValueAtTime(0.18,now+n.t);
+      gain.gain.setValueAtTime(0.0001,now+n.t);
+      gain.gain.exponentialRampToValueAtTime(n.g,now+n.t+0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001,now+n.t+n.d);
+      osc.connect(gain);overtone.connect(ovGain);ovGain.connect(gain);gain.connect(ctx.destination);
+      osc.start(now+n.t);overtone.start(now+n.t);
+      osc.stop(now+n.t+n.d+0.02);overtone.stop(now+n.t+n.d+0.02);
+    }
+  }catch{}
+}
+
+async function sendNativeNotification(title,body,tag='touche-agenda',chimeKind=null){
+  if(chimeKind)playSalonChime(chimeKind);
   if(typeof Notification==='undefined'||Notification.permission!=='granted')return false;
-  const opts={body,icon:'/brand/icon-192.png',badge:'/brand/icon-192.png',tag,data:{url:'/#agenda'}};
+  const vibrate=chimeKind==='alert'?[150,80,150]:chimeKind==='arrival'?[90,50,90]:[80];
+  const opts={body,icon:'/brand/icon-192.png',badge:'/brand/icon-192.png',tag,silent:false,vibrate,data:{url:'/#agenda'}};
   try{
     const reg=swRegistration||(navigator.serviceWorker?await navigator.serviceWorker.ready.catch(()=>null):null);
     if(reg&&typeof reg.showNotification==='function'){
@@ -105,15 +165,15 @@ $('notif-btn')?.addEventListener('click',async()=>{
     return;
   }
   if(Notification.permission==='granted'){
-    const sent=await sendNativeNotification('Touché Hair Studio','Los avisos de agenda están funcionando correctamente en tu dispositivo.','touche-test-'+Date.now());
-    showToast(sent?'Aviso de prueba enviado a tu dispositivo.':'Avisos ya están activos.');
+    const sent=await sendNativeNotification('Touché Hair Studio','Avisos y sonido especial funcionando correctamente en tu dispositivo.','touche-test-'+Date.now(),'arrival');
+    showToast(sent?'Aviso y sonido de prueba enviados a tu dispositivo.':'Sonido de prueba reproducido.');
     return;
   }
   const perm=await Notification.requestPermission();
   updateNotifButton();
   if(perm==='granted'){
-    await sendNativeNotification('Touché Hair Studio','Avisos activados. Te avisaremos antes de tus próximas citas y nuevos turnos.','touche-welcome');
-    showToast('Avisos activados en tu dispositivo.');
+    await sendNativeNotification('Touché Hair Studio','Avisos y sonido especial activados para citas y llegadas del salón.','touche-welcome','arrival');
+    showToast('Avisos y sonido activados en tu dispositivo.');
   }else{
     showToast('No se activaron los avisos. Puedes intentarlo cuando gustes.');
   }
@@ -171,7 +231,7 @@ function processSalonNotifications(data){
         const who=a.staffName?` · Atiende: ${a.staffName}`:'';
         const title=`Nueva cita: ${a.clientName} · ${a.serviceName}`;
         const body=`${dayLbl} a las ${time}${who}`;
-        sendNativeNotification(title,body,'touche-salon-new-'+a.id);
+        sendNativeNotification(title,body,'touche-salon-new-'+a.id,'appointment');
         showToast(`${title} (${dayLbl} ${time}${who})`);
       }
     }
@@ -190,7 +250,7 @@ function processSalonNotifications(data){
         const who=a.staffName?` · Atiende: ${a.staffName}`:'';
         const title=`En ${diffMin} min: ${a.clientName} · ${a.serviceName}`;
         const body=`Hoy a las ${a.startsAt.slice(11,16)}${who}`;
-        sendNativeNotification(title,body,'touche-salon-soon-'+a.id);
+        sendNativeNotification(title,body,'touche-salon-soon-'+a.id,'appointment');
         showToast(`${title} (${a.startsAt.slice(11,16)}${who})`);
       }
     }
@@ -218,9 +278,11 @@ function handleAdminAlerts(detail){
     seenAdminAlertIds.add(al.id);
     if(adminAlertsPrimed||!sessionStorage.getItem('touche_alert_notified_'+al.id)){
       sessionStorage.setItem('touche_alert_notified_'+al.id,'1');
+      const isArrival=al.kind==='staff_arrived';
       const whoSvc=[al.clientName,al.serviceName].filter(Boolean).join(' · ');
-      sendNativeNotification(al.title||'ALERTA: No llegó el cliente — Recordarle',al.message||whoSvc||'Revisa la agenda de Administración.','touche-alert-'+al.id);
-      showToast(`${al.title}${whoSvc?`: ${whoSvc}`:''}`);
+      const chime=isArrival?'arrival':'alert';
+      sendNativeNotification(al.title||'ALERTA: No llegó el cliente — Recordarle',al.message||whoSvc||'Revisa la agenda de Administración.','touche-alert-'+al.id,chime);
+      showToast(isArrival?`${al.title}`:`${al.title}${whoSvc?`: ${whoSvc}`:''}`);
     }
   }
   adminAlertsPrimed=true;

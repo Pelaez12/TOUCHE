@@ -52,6 +52,7 @@ function createDbWithAccounts(){
   sqlite.exec(readFileSync(new URL('../migrations/0009_internal_operations.sql',import.meta.url),'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0010_internal_accounts.sql',import.meta.url),'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0011_stylist_alerts_and_profile.sql',import.meta.url),'utf8'));
+  sqlite.exec(readFileSync(new URL('../migrations/0012_staff_arrival_alerts.sql',import.meta.url),'utf8'));
   return {sqlite,db:makeAccurateD1(sqlite)};
 }
 
@@ -251,10 +252,11 @@ test('stylist isolation, arrival alerts (admin-only), and DB-validated self prof
   assert.equal('clientPhone' in salonNotifs.body.appointments[0],false);
   assert.equal('clientDni' in salonNotifs.body.appointments[0],false);
 
-  // Miriam marks ONLY her own arrival
+  // Miriam marks ONLY her own arrival -> generates Admin-only alert "Llegó la estilista Miriam"
   const myArr=await req(db,'/api/agenda/my-arrival',{method:'POST',cookie:miriamCookie,body:{day:'2026-11-26'}});
   assert.equal(myArr.status,200);
   assert.equal(myArr.body.shift.staffId,'staff-miriam');
+  assert.equal(myArr.body.alertTitle,'Llegó la estilista Miriam');
 
   // Miriam CANNOT mark arrival on Maritza's appointment (403)
   assert.equal((await req(db,`/api/appointments/${apptMaritza.body.id}/arrival`,{method:'POST',cookie:miriamCookie,body:{status:'not_arrived'}})).status,403);
@@ -271,20 +273,22 @@ test('stylist isolation, arrival alerts (admin-only), and DB-validated self prof
   assert.equal(silviaLogin.body.user.accessScope,'reception');
   assert.equal((await req(db,'/api/alerts',{cookie:silviaLogin.cookie})).status,403);
 
-  // ONLY Admin sees both alerts (with client phone to contact via WhatsApp)
+  // ONLY Admin sees all 3 alerts (staff_arrived + client_not_arrived + client_reminder_needed)
   const adminAlerts=await req(db,'/api/alerts?status=unread',{cookie:adminCookie});
   assert.equal(adminAlerts.status,200);
-  assert.equal(adminAlerts.body.unreadCount,2);
-  assert.equal(adminAlerts.body.alerts[0].clientPhone,'987654321');
-  assert.ok(adminAlerts.body.alerts.some(a=>a.title==='ALERTA: No llegó el cliente — Recordarle'));
+  assert.equal(adminAlerts.body.unreadCount,3);
+  assert.ok(adminAlerts.body.alerts.some(a=>a.kind==='staff_arrived'&&a.title==='Llegó la estilista Miriam'));
+  assert.ok(adminAlerts.body.alerts.some(a=>a.title==='ALERTA: No llegó el cliente — Recordarle'&&a.clientPhone==='987654321'));
 
-  // Miriam marks "Llegó" -> auto-resolves client_not_arrived alert; Admin resolves the other
+  // Miriam marks "Llegó" -> auto-resolves client_not_arrived alert; Admin resolves the remaining 2
   const arrived=await req(db,`/api/appointments/${apptMiriam.body.id}/arrival`,{method:'POST',cookie:miriamCookie,body:{status:'arrived'}});
   assert.equal(arrived.status,200);
   assert.equal(arrived.body.arrivalStatus,'arrived');
   const afterArrived=await req(db,'/api/alerts?status=unread',{cookie:adminCookie});
-  assert.equal(afterArrived.body.unreadCount,1);
-  assert.equal((await req(db,`/api/alerts/${afterArrived.body.alerts[0].id}/resolve`,{method:'POST',cookie:adminCookie,body:{}})).status,200);
+  assert.equal(afterArrived.body.unreadCount,2);
+  for(const al of afterArrived.body.alerts){
+    assert.equal((await req(db,`/api/alerts/${al.id}/resolve`,{method:'POST',cookie:adminCookie,body:{}})).status,200);
+  }
   assert.equal((await req(db,'/api/alerts?status=unread',{cookie:adminCookie})).body.unreadCount,0);
 
   // Self-service Profile (#perfil): loads real DB catalog, rejects invented tags, accepts real DB tags

@@ -70,6 +70,7 @@ function createMigratedDb(){
   sqlite.exec(readFileSync(new URL('../migrations/0009_internal_operations.sql',import.meta.url),'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0010_internal_accounts.sql',import.meta.url),'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0011_stylist_alerts_and_profile.sql',import.meta.url),'utf8'));
+  sqlite.exec(readFileSync(new URL('../migrations/0012_staff_arrival_alerts.sql',import.meta.url),'utf8'));
   return {sqlite,db:makeAccurateD1(sqlite)};
 }
 

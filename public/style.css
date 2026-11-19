@@ -177,6 +177,8 @@ body[data-scope="stylist"] .desk-only{display:none!important}
 .admin-alerts-head strong{font-size:13px;color:#8e322a}
 .admin-alerts-head small{font-size:10px;color:#8a5e56}
 .admin-alert-card{background:#fff;border:1px solid #e4bcb4;border-radius:8px;padding:12px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.admin-alert-card.is-arrival{background:#f5fbf6;border-color:#c2ddc8}
+.admin-alert-card.is-arrival .admin-alert-info strong{color:#2d613b}
 .admin-alert-info{flex:1;min-width:200px}
 .admin-alert-info strong{display:block;font-size:12px;color:#8e322a}
 .admin-alert-info p{margin:4px 0;font-size:12px;color:var(--ink);line-height:1.5}

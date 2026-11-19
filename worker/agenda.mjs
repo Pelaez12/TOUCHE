@@ -240,13 +240,26 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
     if(!validDay(day))return response({error:'Fecha no válida.'},400);
     const existingShift=await db.prepare('SELECT day,staff_id AS staffId,turn_order AS turnOrder,checked_in_at AS checkedInAt,status FROM staff_daily_shifts WHERE day=? AND staff_id=?').bind(day,actor.staffId).first();
     if(existingShift&&existingShift.status==='present')return response({saved:true,shift:existingShift});
-    const maxRow=await db.prepare("SELECT COALESCE(MAX(turn_order),0) AS m FROM staff_daily_shifts WHERE day=? AND status='present'").bind(day).first();
-    const nextOrder=(maxRow?.m||0)+1,now=new Date().toISOString();
+    const [maxRow,member]=await db.batch([
+      db.prepare("SELECT COALESCE(MAX(turn_order),0) AS m FROM staff_daily_shifts WHERE day=? AND status='present'").bind(day),
+      db.prepare('SELECT id,display_name AS displayName,short_name AS shortName,role FROM staff WHERE id=?').bind(actor.staffId)
+    ]);
+    const nextOrder=(maxRow.results[0]?.m||0)+1,now=new Date().toISOString();
+    const m=member.results[0];
+    const staffShort=m?.shortName||m?.displayName?.split(/\s+/)[0]||actor.displayName||'Estilista';
+    const staffFull=m?.displayName||actor.displayName||staffShort;
+    const rolePrefix=m?.role==='reception'?'Recepción':m?.role==='manicurist'?'la especialista':'la estilista';
+    const limaTime=new Intl.DateTimeFormat('es-PE',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'America/Lima'}).format(new Date());
+    const alertId='alert-'+crypto.randomUUID();
+    const alertTitle=`Llegó ${rolePrefix} ${staffShort}`;
+    const alertMsg=`${staffFull} marcó su llegada al salón (${limaTime} · ${nextOrder}.º turno del día).`;
     await db.batch([
       db.prepare(`INSERT INTO staff_daily_shifts(day,staff_id,turn_order,checked_in_at,status,updated_at) VALUES (?,?,?,?,'present',?) ON CONFLICT(day,staff_id) DO UPDATE SET turn_order=excluded.turn_order,checked_in_at=excluded.checked_in_at,status='present',updated_at=excluded.updated_at`).bind(day,actor.staffId,nextOrder,now,now),
+      db.prepare(`INSERT INTO admin_alerts(id,appointment_id,client_id,staff_id,kind,title,message,created_by_email,created_by_name,status,created_at) VALUES (?,NULL,NULL,?,'staff_arrived',?,?,?,?,'unread',?)`)
+        .bind(alertId,actor.staffId,alertTitle,alertMsg,actorEmail,staffFull,now),
       log(db,day,'my-arrival-checkin',[actor.staffId])
     ]);
-    return response({saved:true,shift:{day,staffId:actor.staffId,turnOrder:nextOrder,checkedInAt:now,status:'present'}});
+    return response({saved:true,alertId,alertTitle,shift:{day,staffId:actor.staffId,turnOrder:nextOrder,checkedInAt:now,status:'present'}});
   }
 
   if(path==='/api/agenda/shifts'&&method==='PUT'){
@@ -263,9 +276,28 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
       const order=Number.isInteger(s.turnOrder)&&s.turnOrder>=1?s.turnOrder:i+1;
       clean.push({staffId:s.staffId,turnOrder:order,status:st,checkedInAt:typeof s.checkedInAt==='string'&&s.checkedInAt?s.checkedInAt:now});
     }
+    const prevPresent=isAdmin
+      ? new Set()
+      : new Set((await db.prepare("SELECT staff_id AS staffId FROM staff_daily_shifts WHERE day=? AND status='present'").bind(body.day).all()).results.map(r=>r.staffId));
+    const newlyPresent=isAdmin?[]:clean.filter(s=>s.status==='present'&&!prevPresent.has(s.staffId));
+    const staffInfoMap=newlyPresent.length
+      ? new Map((await db.prepare('SELECT id,display_name AS displayName,short_name AS shortName,role FROM staff').all()).results.map(r=>[r.id,r]))
+      : new Map();
+    const limaTime=new Intl.DateTimeFormat('es-PE',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'America/Lima'}).format(new Date());
+
     const stmts=[db.prepare('DELETE FROM staff_daily_shifts WHERE day=?').bind(body.day)];
     for(const s of clean){
       stmts.push(db.prepare('INSERT INTO staff_daily_shifts(day,staff_id,turn_order,checked_in_at,status,updated_at) VALUES (?,?,?,?,?,?)').bind(body.day,s.staffId,s.turnOrder,s.checkedInAt,s.status,now));
+    }
+    for(const s of newlyPresent){
+      const m=staffInfoMap.get(s.staffId);
+      if(!m)continue;
+      const staffShort=m.shortName||m.displayName.split(/\s+/)[0];
+      const rolePrefix=m.role==='reception'?'Recepción':m.role==='manicurist'?'la especialista':'la estilista';
+      stmts.push(
+        db.prepare(`INSERT INTO admin_alerts(id,appointment_id,client_id,staff_id,kind,title,message,created_by_email,created_by_name,status,created_at) VALUES (?,NULL,NULL,?,'staff_arrived',?,?,?,?,'unread',?)`)
+          .bind('alert-'+crypto.randomUUID(),s.staffId,`Llegó ${rolePrefix} ${staffShort}`,`${m.displayName} llegó al salón (${limaTime} · ${s.turnOrder}.º turno del día).`,actorEmail,actor?.displayName||actorEmail,now)
+      );
     }
     stmts.push(log(db,body.day,'update-daily-shifts',['shifts']));
     await db.batch(stmts);
