@@ -1,9 +1,11 @@
 import {store} from './store.mjs';
 
 const $=id=>document.getElementById(id);
+const node=(tag,value,cls)=>{const n=document.createElement(tag);if(value!==undefined)n.textContent=value;if(cls)n.className=cls;return n;};
 let deferredInstallPrompt=null;
 let swRegistration=null;
-let knownMyApptIds=null;
+let knownSalonApptIds=null;
+let latestSalonNotifs={today:'',todayCount:0,appointments:[]};
 
 const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent);
 const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
@@ -117,35 +119,88 @@ $('notif-btn')?.addEventListener('click',async()=>{
   }
 });
 
-function checkUpcomingAndNewAppointments(detail){
-  if(typeof Notification==='undefined'||Notification.permission!=='granted')return;
-  const appts=detail?.appointments||[];
-  const todayStr=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date());
-  const user=store.user;
-  const relevant=appts.filter(a=>a.status==='scheduled'&&a.startsAt.startsWith(todayStr)&&(!user?.staffId||a.staffId===user.staffId));
-  const currentIds=new Set(relevant.map(a=>a.id));
+function formatApptDay(dayStr,todayStr){
+  if(dayStr===todayStr)return 'Hoy';
+  return new Intl.DateTimeFormat('es-PE',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'}).format(new Date(dayStr+'T12:00:00Z'));
+}
 
-  if(knownMyApptIds!==null){
-    for(const a of relevant){
-      if(!knownMyApptIds.has(a.id)){
-        const who=a.staffName?` · ${a.staffName}`:'';
-        sendNativeNotification('Nueva cita en Touché',`${a.startsAt.slice(11,16)} · ${a.clientName} — ${a.serviceName}${who}`,'touche-new-'+a.id);
+function renderSalonNotifsModal(){
+  const list=$('salon-notifs-list'),status=$('salon-notifs-status');
+  if(!list)return;
+  list.replaceChildren();
+  const appts=latestSalonNotifs.appointments||[];
+  const todayStr=latestSalonNotifs.today||new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date());
+  if(status){
+    status.textContent=appts.length
+      ?`${latestSalonNotifs.todayCount} cita${latestSalonNotifs.todayCount===1?'':'s'} hoy · ${appts.length} en los próximos 14 días.`
+      :'No hay citas próximas agendadas en este momento.';
+  }
+  if(!appts.length){
+    list.append(node('p','Cuando se agende una nueva cita en el salón, todas recibirán el aviso aquí y en su dispositivo.','field-help'));
+    return;
+  }
+  for(const a of appts){
+    const dayStr=a.startsAt.slice(0,10);
+    const timeRange=`${a.startsAt.slice(11,16)} – ${a.endsAt.slice(11,16)}`;
+    const card=node('article',undefined,'salon-notif-card'+(dayStr===todayStr?' is-today':''));
+    const top=node('div',undefined,'salon-notif-top');
+    top.append(
+      node('strong',`${formatApptDay(dayStr,todayStr)} · ${timeRange}`),
+      node('span',`Atiende: ${a.staffName||'Por asignar'}`,'mini-tag')
+    );
+    card.append(top,node('h4',a.clientName),node('p',a.serviceName,'salon-notif-svc'));
+    list.append(card);
+  }
+}
+
+function processSalonNotifications(data){
+  latestSalonNotifs=data||{today:'',todayCount:0,appointments:[]};
+  const appts=latestSalonNotifs.appointments||[];
+  const todayStr=latestSalonNotifs.today||new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date());
+  const cntEl=$('salon-notifs-count');
+  if(cntEl)cntEl.textContent=String(appts.length);
+  if($('salon-notifs-modal')?.open)renderSalonNotifsModal();
+
+  // Notificar a TODAS las integrantes del equipo sobre TODAS las citas agendadas del salón
+  const currentIds=new Set(appts.map(a=>a.id));
+  if(knownSalonApptIds!==null){
+    for(const a of appts){
+      if(!knownSalonApptIds.has(a.id)){
+        const dayLbl=formatApptDay(a.startsAt.slice(0,10),todayStr);
+        const time=a.startsAt.slice(11,16);
+        const who=a.staffName?` · Atiende: ${a.staffName}`:'';
+        const body=`${dayLbl} ${time} · ${a.clientName} — ${a.serviceName}${who}`;
+        sendNativeNotification('Nueva cita en el salón · Touché',body,'touche-salon-new-'+a.id);
+        showToast(`Nueva cita: ${a.clientName} (${dayLbl} ${time}${who})`);
       }
     }
   }
-  knownMyApptIds=currentIds;
+  knownSalonApptIds=currentIds;
 
+  // Recordatorio de llegada próxima (1 a 20 min) para todo el salón
   const nowMs=Date.now();
-  for(const a of relevant){
+  for(const a of appts){
+    if(!a.startsAt.startsWith(todayStr))continue;
     const diffMin=Math.round((Date.parse(a.startsAt)-nowMs)/60000);
     if(diffMin>=1&&diffMin<=20){
-      const key='touche_notified_'+a.id;
+      const key='touche_salon_soon_'+a.id;
       if(!sessionStorage.getItem(key)){
         sessionStorage.setItem(key,'1');
-        sendNativeNotification(`Cita en ${diffMin} min · Touché`,`${a.startsAt.slice(11,16)} · ${a.clientName} (${a.serviceName})`,'touche-soon-'+a.id);
+        const who=a.staffName?` · Atiende: ${a.staffName}`:'';
+        sendNativeNotification(`Clienta llega en ${diffMin} min · Touché`,`${a.startsAt.slice(11,16)} · ${a.clientName} (${a.serviceName})${who}`,'touche-salon-soon-'+a.id);
       }
     }
   }
+}
+
+async function fetchSalonNotifications(){
+  if(!store.user)return;
+  try{
+    const r=await fetch('/api/agenda/notifications');
+    if(!r.ok)return;
+    const data=await r.json();
+    processSalonNotifications(data);
+  }catch{}
 }
 
 const seenAdminAlertIds=new Set();
@@ -166,7 +221,18 @@ function handleAdminAlerts(detail){
   adminAlertsPrimed=true;
 }
 
-window.addEventListener('touche:agenda-updated',e=>checkUpcomingAndNewAppointments(e.detail));
+$('salon-notifs-btn')?.addEventListener('click',async()=>{
+  renderSalonNotifsModal();
+  $('salon-notifs-modal')?.showModal();
+  await fetchSalonNotifications();
+});
+$('salon-notifs-refresh')?.addEventListener('click',()=>fetchSalonNotifications());
+for(const id of ['salon-notifs-close','salon-notifs-done'])$(id)?.addEventListener('click',()=>$('salon-notifs-modal')?.close());
+
+window.addEventListener('touche:session-ready',()=>fetchSalonNotifications());
+window.addEventListener('touche:agenda-updated',()=>fetchSalonNotifications());
 window.addEventListener('touche:admin-alerts',e=>handleAdminAlerts(e.detail));
+setInterval(()=>{if(!document.hidden&&store.user)fetchSalonNotifications();},30000);
 updateNotifButton();
 updateInstallButton();
+if(store.user)fetchSalonNotifications();

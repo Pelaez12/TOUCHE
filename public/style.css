@@ -302,4 +302,14 @@ table,.stats strong,.history-count-pill,.history-stat-mini strong,.date-cell{fon
 #staff-svc-filter{margin-top:10px;min-height:36px;font-size:11px}
 .staff-editor-footer{justify-content:space-between}
 .staff-editor-footer-right{display:flex;gap:10px;margin-left:auto}
-@media(max-width:700px){.return-presets-row{flex-direction:column;align-items:flex-start}.return-service-pills{padding-inline:14px}.client-history-stats{grid-template-columns:1fr}.staff-editor-footer{flex-wrap:wrap}}
+.salon-notifs-btn{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:6px 11px;border-radius:999px;border:1px solid #e2d4cc;background:#fcf8f5;color:#5c423a;font-size:11px;font-weight:600;white-space:nowrap}
+.salon-notifs-btn .icon{width:15px;height:15px}
+.salon-notifs-btn:hover{background:#f5e6df;border-color:#cfaea2}
+.salon-notifs-btn strong{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:var(--brand);color:#fff;font-size:10px;font-variant-numeric:tabular-nums}
+.salon-notifs-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.salon-notif-card{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:#fff}
+.salon-notif-card.is-today{border-color:#dfc4b8;background:#fcf6f2}
+.salon-notif-top{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--brand-dark);font-variant-numeric:tabular-nums}
+.salon-notif-card h4{margin:6px 0 2px;font-size:13px;font-weight:600;color:var(--ink)}
+.salon-notif-svc{margin:0;font-size:11px;color:var(--muted)}
+@media(max-width:700px){.salon-notifs-btn>span:not(.icon){display:none}.return-presets-row{flex-direction:column;align-items:flex-start}.return-service-pills{padding-inline:14px}.client-history-stats{grid-template-columns:1fr}.staff-editor-footer{flex-wrap:wrap}}

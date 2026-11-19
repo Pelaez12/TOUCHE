@@ -242,6 +242,15 @@ test('stylist isolation, arrival alerts (admin-only), and DB-validated self prof
   assert.equal(myAgenda.body.appointments[0].id,apptMiriam.body.id);
   assert.equal(myAgenda.body.appointments[0].clientPhone,null);
 
+  // Salon-wide appointment notifications reach ALL team members (Miriam sees both hers and Maritza's incoming clients, without phone/DNI!)
+  const salonNotifs=await req(db,'/api/agenda/notifications',{cookie:miriamCookie});
+  assert.equal(salonNotifs.status,200);
+  assert.equal(salonNotifs.body.appointments.length,2);
+  assert.ok(salonNotifs.body.appointments.some(a=>a.staffId==='staff-miriam'));
+  assert.ok(salonNotifs.body.appointments.some(a=>a.staffId==='staff-maritza'));
+  assert.equal('clientPhone' in salonNotifs.body.appointments[0],false);
+  assert.equal('clientDni' in salonNotifs.body.appointments[0],false);
+
   // Miriam marks ONLY her own arrival
   const myArr=await req(db,'/api/agenda/my-arrival',{method:'POST',cookie:miriamCookie,body:{day:'2026-11-26'}});
   assert.equal(myArr.status,200);

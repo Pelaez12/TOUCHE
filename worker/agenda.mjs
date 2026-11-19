@@ -215,6 +215,24 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
     return response(payload);
   }
 
+  if(path==='/api/agenda/notifications'&&method==='GET'){
+    const todayStr=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date());
+    const endD=new Date(todayStr+'T12:00:00Z');endD.setUTCDate(endD.getUTCDate()+14);
+    const endStr=endD.toISOString().slice(0,10);
+    const rows=(await db.prepare(`SELECT a.id,c.full_name AS clientName,s.name AS serviceName,
+      a.starts_at AS startsAt,a.ends_at AS endsAt,a.staff_id AS staffId,
+      COALESCE(st.short_name,st.display_name,NULLIF(a.assignee,''),'Por asignar') AS staffName,
+      a.created_at AS createdAt
+      FROM appointments a
+      JOIN clients c ON c.id=a.client_id
+      JOIN services s ON s.id=a.service_id
+      LEFT JOIN staff st ON st.id=a.staff_id
+      WHERE a.status='scheduled' AND a.starts_at>=? AND a.starts_at<?
+      ORDER BY a.starts_at ASC,c.full_name COLLATE NOCASE LIMIT 60`).bind(todayStr,endStr).all()).results;
+    const todayCount=rows.filter(r=>r.startsAt.startsWith(todayStr)).length;
+    return response({today:todayStr,todayCount,appointments:rows});
+  }
+
   if(path==='/api/agenda/my-arrival'&&method==='POST'){
     if(!actor?.staffId)return response({error:'Tu cuenta no está vinculada a una ficha de estilista.'},400);
     let body={};try{if(request.headers.get('content-type')?.includes('application/json'))body=await readBody(request);}catch{}
