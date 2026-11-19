@@ -8,8 +8,8 @@ ALTER TABLE staff ADD COLUMN notes TEXT NOT NULL DEFAULT '';
 
 INSERT INTO staff(id,display_name,short_name,role,seniority_tier,can_hold_appointments,rest_weekday,specialty_summary,active) VALUES
   ('staff-milagros','Milagros Núñez','Mili','stylist','senior',1,1,'Estilista colorista y cortes',1),
-  ('staff-miriam','Miriam Pecho','Miriam','stylist','senior',1,2,'Estilista colorista, alisado, botox, maquillaje, peinados y moños (Plan B: uñas y depilación)',1),
-  ('staff-maritza','Maritza Trucios','Maritza','stylist','senior',1,3,'Estilista colorista, alisados, botox y cepillados (Plan B: uñas y depilación)',1),
+  ('staff-miriam','Miriam Pecho','Miriam','stylist','senior',1,2,'Estilista colorista, alisado, botox, maquillaje, peinados y moños (apoyo temporal: uñas y depilación)',1),
+  ('staff-maritza','Maritza Trucios','Maritza','stylist','senior',1,3,'Estilista colorista, alisados, botox y cepillados (apoyo temporal: uñas y depilación)',1),
   ('staff-martha','Martha Arone','Martha','junior_stylist_assistant','junior',1,2,'Asistente y colorista junior (todo color e hidrataciones)',1),
   ('staff-silvia','Silvia Rodríguez','Silvia','reception','support',0,NULL,'Recepción, WhatsApp Web, agenda y confirmaciones',1)
 ON CONFLICT(id) DO UPDATE SET

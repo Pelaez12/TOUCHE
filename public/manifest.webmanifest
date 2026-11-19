@@ -1,0 +1,50 @@
+{
+  "id": "/#agenda",
+  "name": "Touché Hair Studio",
+  "short_name": "Touché",
+  "description": "Agenda diaria, equipo de especialistas y seguimiento de clientas de Touché Hair Studio.",
+  "start_url": "/#agenda",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#ac6660",
+  "lang": "es-PE",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/brand/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Agenda de hoy",
+      "short_name": "Agenda",
+      "url": "/#agenda",
+      "icons": [{"src": "/brand/icon-192.png", "sizes": "192x192"}]
+    },
+    {
+      "name": "Clientas",
+      "short_name": "Clientas",
+      "url": "/#clientas",
+      "icons": [{"src": "/brand/icon-192.png", "sizes": "192x192"}]
+    }
+  ]
+}

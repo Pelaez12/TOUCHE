@@ -159,3 +159,40 @@ test('admin assigns passwords to empty collaborators, enforces single admin, and
   assert.equal((await req(db,'/api/clients',{cookie:silviaCookie})).status,401);
   assert.equal((await req(db,'/api/login',{method:'POST',body:{email:'silvia@touche.pe',password:'NuevaSilvia99'}})).status,403);
 });
+
+test('PWA manifest, service worker, icons, and security headers are served cleanly', async ()=>{
+  const {db}=createDbWithAccounts();
+  const env={DB:db,ADMIN_TOKEN:'secret-bearer-token'};
+
+  const manifestRes=await worker.fetch(new Request(ORIGIN+'/manifest.webmanifest'),env);
+  assert.equal(manifestRes.status,200);
+  assert.match(manifestRes.headers.get('content-type')||'',/manifest\+json/);
+  const manifest=await manifestRes.json();
+  assert.equal(manifest.display,'standalone');
+  assert.equal(manifest.start_url,'/#agenda');
+  assert.equal(manifest.scope,'/');
+  assert.ok(manifest.icons.some(i=>i.sizes==='192x192'));
+  assert.ok(manifest.icons.some(i=>i.sizes==='512x512'&&i.purpose==='maskable'));
+
+  const swRes=await worker.fetch(new Request(ORIGIN+'/sw.js'),env);
+  assert.equal(swRes.status,200);
+  assert.equal(swRes.headers.get('service-worker-allowed'),'/');
+  assert.match(swRes.headers.get('cache-control')||'',/no-cache/);
+  const swText=await swRes.text();
+  assert.match(swText,/\/api\//);
+  assert.match(swText,/notificationclick/);
+
+  const iconRes=await worker.fetch(new Request(ORIGIN+'/brand/icon-192.png'),env);
+  assert.equal(iconRes.status,200);
+  assert.equal(iconRes.headers.get('content-type'),'image/png');
+
+  const appleRes=await worker.fetch(new Request(ORIGIN+'/brand/apple-touch-icon.png'),env);
+  assert.equal(appleRes.status,200);
+  assert.equal(appleRes.headers.get('content-type'),'image/png');
+
+  const loginRes=await worker.fetch(new Request(ORIGIN+'/login'),env);
+  assert.equal(loginRes.status,200);
+  const csp=loginRes.headers.get('content-security-policy')||'';
+  assert.match(csp,/worker-src 'self'/);
+  assert.match(csp,/manifest-src 'self'/);
+});

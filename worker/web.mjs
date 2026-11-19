@@ -2,9 +2,10 @@ import assets from './assets.generated.mjs';
 import {hashText,normalizeEmail,verifyPassword} from './crypto.mjs';
 
 const cookieName='__Host-touche_session';
-const securityBase={'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",'Strict-Transport-Security':'max-age=15552000','Permissions-Policy':'camera=(), microphone=(), geolocation=()'};
+const securityBase={'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",'Strict-Transport-Security':'max-age=15552000','Permissions-Policy':'camera=(), microphone=(), geolocation=()'};
 const security={'Cache-Control':'no-store',...securityBase};
-const staticCache='public, max-age=300, stale-while-revalidate=86400';
+const staticCache='public, max-age=3600, stale-while-revalidate=86400';
+const codeCache='public, max-age=0, must-revalidate';
 const json=(value,status=200,extra={})=>new Response(JSON.stringify(value),{status,headers:{...security,'Content-Type':'application/json; charset=utf-8',...extra}});
 export {hashText};
 export function sameOrigin(request){return request.headers.get('origin')===new URL(request.url).origin&&request.headers.get('sec-fetch-site')!=='cross-site';}
@@ -26,7 +27,13 @@ function etagMatches(header,etag){
 function asset(path,request,status=200){
   const a=assets[path];if(!a)return new Response('No encontrado',{status:404,headers:security});
   const isHtml=path.endsWith('.html');
-  const headers=isHtml?{...security,'Content-Type':a.type}:{...securityBase,'Cache-Control':staticCache,'Content-Type':a.type,...(a.etag?{ETag:a.etag}:{})};
+  const isSw=path==='/sw.js';
+  const isCode=path.endsWith('.mjs')||path.endsWith('.css')||path.endsWith('.webmanifest');
+  const headers=isHtml
+    ? {...security,'Content-Type':a.type}
+    : isSw
+      ? {...securityBase,'Cache-Control':'no-cache','Service-Worker-Allowed':'/','Content-Type':a.type,...(a.etag?{ETag:a.etag}:{})}
+      : {...securityBase,'Cache-Control':isCode?codeCache:staticCache,'Content-Type':a.type,...(a.etag?{ETag:a.etag}:{})};
   if(!isHtml&&a.etag&&etagMatches(request?.headers?.get('if-none-match'),a.etag))return new Response(null,{status:304,headers});
   const bytes=Uint8Array.from(atob(a.data),c=>c.charCodeAt(0));
   return new Response(bytes,{status,headers});

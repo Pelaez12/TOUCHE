@@ -1,11 +1,11 @@
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 const root=new URL('./',import.meta.url);
-const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2','.ttf':'font/ttf','.txt':'text/plain'};
+const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.js':'text/javascript; charset=utf-8','.webmanifest':'application/manifest+json; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2','.ttf':'font/ttf','.txt':'text/plain'};
 const port=Number(process.env.TOUCHE_PORT||5188);
 const apiConfig=JSON.parse(await readFile(new URL('.local/api.json',root),'utf8'));
 const token=(await readFile(new URL('.local/admin-token',root),'utf8')).trim();
-const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",'Referrer-Policy':'no-referrer'};
+const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",'Referrer-Policy':'no-referrer'};
 async function limitedBody(req){let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>16000)throw Error('body-limit');chunks.push(chunk);}return Buffer.concat(chunks);}
 createServer(async(req,res)=>{
   const send=(status,body,type='application/json; charset=utf-8')=>{res.writeHead(status,{'Content-Type':type,...headers});res.end(req.method==='HEAD'?undefined:body);};
@@ -26,7 +26,7 @@ createServer(async(req,res)=>{
   }
   if(!['GET','HEAD'].includes(req.method)){send(405,'');return;}
   let path=url.pathname==='/'?'index.html':url.pathname.slice(1);
-  if(!/^(index\.html|style\.css|store\.mjs|app\.mjs|clients\.mjs|analytics\.mjs|contact\.mjs|agenda\.mjs|accounts\.mjs|session\.mjs|login\.mjs|login\.css|login\.html|brand\/[a-zA-Z0-9._-]+|icons\/[a-zA-Z0-9._-]+)$/.test(path)){send(404,'No encontrado','text/plain');return;}
+  if(!/^(index\.html|style\.css|manifest\.webmanifest|sw\.js|pwa\.mjs|store\.mjs|app\.mjs|clients\.mjs|analytics\.mjs|contact\.mjs|agenda\.mjs|accounts\.mjs|session\.mjs|login\.mjs|login\.css|login\.html|brand\/[a-zA-Z0-9._-]+|icons\/[a-zA-Z0-9._-]+)$/.test(path)){send(404,'No encontrado','text/plain');return;}
   const extension='.'+path.split('.').at(-1);
   try {send(200,await readFile(new URL('public/'+path,root)),types[extension]||'application/octet-stream');}
   catch {send(404,'No encontrado','text/plain');}

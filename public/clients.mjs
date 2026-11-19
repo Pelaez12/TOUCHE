@@ -65,12 +65,12 @@ function renderDirectory(){
 }
 function navigate(){
   let selected=activePage();
-  if(store.user&&!store.isAdmin()&&['return','quality','accounts'].includes(selected)){
+  if(store.user&&!store.isAdmin()&&['return','quality','accounts','team'].includes(selected)){
     location.hash='#agenda';selected='agenda';
   }
-  for(const name of ['clients','return','quality','agenda','accounts'])$(name+'-page').hidden=name!==selected;
+  for(const name of ['clients','return','quality','agenda','accounts','team'])$(name+'-page').hidden=name!==selected;
   for(const a of document.querySelectorAll('[data-page]')){if(a.dataset.page===selected)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');}
-  $('breadcrumb-page').textContent={clients:'Clientas',return:'Retorno de clientas',quality:'Revisión del historial',agenda:'Agenda del día',accounts:'Cuentas y acceso'}[selected];
+  $('breadcrumb-page').textContent={clients:'Clientas',return:'Retorno de clientas',quality:'Revisión del historial',agenda:'Agenda del día',accounts:'Cuentas y acceso',team:'Colaboradoras'}[selected];
   $('sidebar').classList.remove('open');$('menu-toggle').setAttribute('aria-expanded','false');
   window.scrollTo(0,0);
 }

@@ -121,3 +121,49 @@ body[data-role="admin"] .collab-only{display:none!important}
 .staff-ovr-add-row{display:grid;grid-template-columns:1fr 145px auto;gap:8px;align-items:center;margin-bottom:14px}
 .staff-ovr-add-row select{min-height:34px;font-size:11px;padding:5px 8px}
 @media(max-width:600px){.staff-modal-head{flex-direction:column}.staff-card-row{flex-direction:column}.staff-cat-grid{grid-template-columns:1fr}.staff-ovr-add-row{grid-template-columns:1fr}}
+
+/* Sección Colaboradoras, Mi agenda, Recomendación por especialidad y PWA móvil */
+.sidebar-pwa-actions{display:flex;gap:8px;margin-bottom:10px}
+.sidebar-pwa-actions button{flex:1;font-size:10px;min-height:33px;padding:6px 8px}
+#notif-btn.notif-active{background:#edf4ee;border-color:#c6d9c9;color:#3d6546}
+.agenda-day-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.agenda-view-switch{display:inline-flex;border:1px solid var(--line);border-radius:7px;background:#faf7f4;padding:3px;gap:3px}
+.agenda-view-switch button{border:0;min-height:31px;padding:5px 11px;font-size:11px;font-weight:500;color:var(--muted);background:transparent;border-radius:5px}
+.agenda-view-switch button.selected{background:#fff;color:var(--brand-dark);font-weight:600;box-shadow:0 1px 3px #3e2d2514}
+.agenda-my-banner{border:1px solid #e7d5cc;background:linear-gradient(135deg,#fcf5f0,#fff);border-radius:10px;padding:15px 17px;margin:10px 0 14px}
+.my-banner-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.my-banner-top strong{display:block;font-size:14px;color:var(--brand-dark)}
+.my-banner-top p{margin:4px 0 0;font-size:12px;color:var(--ink)}
+.my-banner-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.my-banner-services{display:block;margin-top:10px;padding-top:9px;border-top:1px solid #efe3dc;font-size:11px;color:#6f5249;line-height:1.6}
+.staff-column.my-column{border-color:#d8b3a8;box-shadow:0 2px 10px #ac666014}
+.appt-recommendation{margin:12px 0;padding:12px 14px;border:1px solid #e5d2c7;background:#fcf5f0;border-radius:8px;display:flex;flex-direction:column;gap:6px}
+.appt-recommendation.warn{border-color:#e5c8bd;background:#f9eae5}
+.appt-recommendation strong{font-size:12px;color:var(--brand-dark)}
+.appt-recommendation small{font-size:11px;color:var(--muted);line-height:1.5}
+.appt-rec-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.team-page-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin:12px 0 26px}
+.team-member-card{border:1px solid var(--line);border-radius:10px;background:#fff;padding:18px;display:flex;flex-direction:column;gap:12px}
+.team-member-card.inactive{background:#faf8f6;opacity:.82}
+.team-card-head{display:flex;align-items:center;gap:12px}
+.team-card-head strong{display:block;font-size:14px;font-weight:600}
+.team-card-head small{display:block;font-size:11px;color:var(--muted);margin-top:3px}
+.team-card-summary{margin:0;font-size:11px;color:var(--muted);line-height:1.6}
+.team-cap-chips{display:flex;flex-wrap:wrap;gap:6px}
+.team-card-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:10px;border-top:1px solid #f1ece8}
+.team-inactive-section{margin:10px 0 26px}
+.team-inactive-section h2{font-size:15px;color:var(--muted);margin-bottom:12px}
+.team-durations-card{border:1px solid var(--line);border-radius:10px;background:#fff}
+.team-duration-pad{padding:0 20px 20px}
+.mobile-bottom-nav{display:none}
+@media(max-width:700px){
+  .topbar{padding-top:env(safe-area-inset-top);min-height:calc(65px + env(safe-area-inset-top))}
+  main{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
+  .toast{bottom:calc(78px + env(safe-area-inset-bottom))}
+  .mobile-bottom-nav{position:fixed;inset:auto 0 0 0;z-index:40;display:flex;align-items:stretch;justify-content:space-around;background:#fcfbfa;border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom));box-shadow:0 -4px 16px #3e2d2510}
+  .mobile-bottom-nav a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:48px;padding:4px 6px;margin:0;border-radius:8px;font-size:10px;font-weight:500;color:var(--muted)}
+  .mobile-bottom-nav a .icon{width:20px;height:20px}
+  .mobile-bottom-nav a[aria-current=page]{background:var(--selected);color:var(--brand-dark);font-weight:600}
+  .team-page-grid{grid-template-columns:1fr}
+  .team-duration-pad{padding:0 14px 16px}
+}

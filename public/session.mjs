@@ -22,7 +22,7 @@ function syncRoleUI(user){
   if($('user-name'))$('user-name').textContent=user.displayName||user.email;
   if($('user-meta'))$('user-meta').textContent=`${user.email} · ${isAdmin?'Administrador (único)':'Colaborador'}`;
   if(changePasswordBtn)changePasswordBtn.hidden=!!user.localProxy;
-  if(!isAdmin&&['#retorno','#panel','#revision','#quality','#cuentas'].includes(location.hash)){
+  if(!isAdmin&&['#retorno','#panel','#revision','#quality','#cuentas','#equipo'].includes(location.hash)){
     location.hash='#agenda';
   }
 }

@@ -1,3 +1,5 @@
+if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(()=>{});}
+
 const form=document.getElementById('login-form');
 const button=document.getElementById('login-submit');
 const error=document.getElementById('login-error');

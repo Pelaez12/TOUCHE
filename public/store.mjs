@@ -5,6 +5,7 @@ export function debounce(fn,ms=150){
 export function activePage(){
   const h=location.hash;
   if(h==='#agenda')return 'agenda';
+  if(h==='#equipo')return 'team';
   if(h==='#retorno'||h==='#panel')return 'return';
   if(h==='#revision'||h==='#quality')return 'quality';
   if(h==='#cuentas')return 'accounts';

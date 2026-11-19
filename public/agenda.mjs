@@ -14,7 +14,76 @@ const CONFIRM_LABELS={unconfirmed:'Sin confirmar',reminded_day_before:'Recordada
 
 let date=today(),month=date.slice(0,7),appointments=[],clients=[],services=[],preferences=null;
 let staff=[],categoryCaps=[],serviceOverrides=[],exceptions=[],dailyShifts=[];
-let activeFilter='all',noteDirty=false,loading=false,loadId=0,bootstrapped=false,editingAppointment=null;
+let activeFilter='all',agendaScope='all',scopeInitialized=false,noteDirty=false,loading=false,loadId=0,bootstrapped=false,editingAppointment=null;
+
+function getMyStaff(){
+  const sid=store.user?.staffId;
+  return sid?staff.find(m=>m.id===sid)||null:null;
+}
+
+function initScopeIfNeeded(){
+  if(scopeInitialized||!store.user||!staff.length)return;
+  const me=getMyStaff();
+  agendaScope=!store.isAdmin()&&me&&me.canHoldAppointments?'mine':'all';
+  scopeInitialized=true;
+  syncScopeUI();
+}
+
+function syncScopeUI(){
+  for(const b of document.querySelectorAll('[data-agenda-scope]')){
+    const sel=b.dataset.agendaScope===agendaScope;
+    b.classList.toggle('selected',sel);
+    b.setAttribute('aria-pressed',String(sel));
+  }
+}
+
+function renderMyBanner(){
+  const banner=$('agenda-my-banner');
+  const sw=$('agenda-view-switch');
+  if(!banner||!sw)return;
+  const me=getMyStaff();
+  if(!me){banner.hidden=true;sw.hidden=true;return;}
+  banner.replaceChildren();
+  if(me.canHoldAppointments){
+    sw.hidden=false;syncScopeUI();
+    const st=staffDayStatus(me,date);
+    const sh=dailyShifts.find(s=>s.staffId===me.id);
+    const myCount=appointments.filter(a=>a.startsAt.startsWith(date)&&a.staffId===me.id&&a.status==='scheduled').length;
+    const head=node('div',undefined,'my-banner-top');
+    const left=node('div');
+    left.append(
+      node('strong',`Hola, ${me.shortName||me.displayName} · ${ROLE_LABELS[me.role]||me.role}`),
+      node('p',st.working
+        ?(myCount?`Tienes ${myCount} cita${myCount===1?'':'s'} programada${myCount===1?'':'s'} este día.`:'No tienes citas asignadas aún en este día.')
+        :`Este día figura como ${st.reason.toLowerCase()}.`)
+    );
+    const right=node('div',undefined,'my-banner-actions');
+    if(st.working){
+      if(sh?.status==='present'){
+        right.append(node('span',`Tu turno hoy: ${sh.turnOrder}.º lugar`,'mini-tag'));
+      }else{
+        const btn=node('button','Marcar mi llegada','primary tiny-btn');btn.type='button';
+        btn.addEventListener('click',()=>saveShiftCheckIn(me.id,'present'));
+        right.append(btn);
+      }
+    }
+    head.append(left,right);
+    banner.append(head);
+    banner.append(node('small',`Tus servicios habilitados: ${summarizeStaffServices(me)}`,'my-banner-services'));
+    banner.hidden=false;
+  } else {
+    sw.hidden=true;agendaScope='all';
+    const head=node('div',undefined,'my-banner-top');
+    const left=node('div');
+    left.append(
+      node('strong',`Hola, ${me.shortName||me.displayName} · Recepción`),
+      node('p','Puedes ver toda la agenda del salón, marcar llegadas, confirmar citas y agendar clientas.')
+    );
+    head.append(left);
+    banner.append(head);
+    banner.hidden=false;
+  }
+}
 
 async function api(path,options={}){
   const r=await fetch(path,{...options,headers:{'Content-Type':'application/json',...options.headers}});
@@ -146,7 +215,7 @@ async function saveShiftCheckIn(staffId,status){
   const payload=[...present.map((s,i)=>({...s,turnOrder:i+1})),...absent.map((s,i)=>({...s,turnOrder:present.length+i+1}))];
   try{
     const res=await api('/api/agenda/shifts',{method:'PUT',body:JSON.stringify({day:date,shifts:payload})});
-    dailyShifts=res.shifts;renderShiftsBar();message('Orden de llegada actualizado.');
+    dailyShifts=res.shifts;renderShiftsBar();renderMyBanner();message('Orden de llegada actualizado.');
   }catch(e){message(e.message,true);}
 }
 
@@ -162,7 +231,7 @@ async function moveShiftOrder(ordered,idx,delta){
   ];
   try{
     const res=await api('/api/agenda/shifts',{method:'PUT',body:JSON.stringify({day:date,shifts:payload})});
-    dailyShifts=res.shifts;renderShiftsBar();message('Prioridad de turno actualizada.');
+    dailyShifts=res.shifts;renderShiftsBar();renderMyBanner();message('Prioridad de turno actualizada.');
   }catch(e){message(e.message,true);}
 }
 
@@ -249,42 +318,58 @@ function buildAppointmentCard(a){
 }
 
 function render(){
+  initScopeIfNeeded();
   calendar();$('agenda-date').value=date;$('agenda-day-title').textContent=fmtDay(date);
-  renderTeamBar();renderShiftsBar();
+  renderMyBanner();renderTeamBar();renderShiftsBar();
+  const me=getMyStaff();
+  const onlyMine=agendaScope==='mine'&&me&&me.canHoldAppointments;
   const dayRows=appointments.filter(a=>a.startsAt.startsWith(date));
   const active=dayRows.filter(a=>a.status==='scheduled');
   const confirmed=active.filter(a=>a.confirmationStatus==='confirmed').length;
   const done=dayRows.filter(a=>a.status==='completed').length;
   const noShows=dayRows.filter(a=>a.status==='no_show').length;
-  $('agenda-day-count').textContent=`${active.length} programada${active.length===1?'':'s'} (${confirmed} confirm.) · ${done} realizadas${noShows?` · ${noShows} no asistió`:''}`;
+  if(onlyMine){
+    const myActive=active.filter(a=>a.staffId===me.id);
+    const myDone=dayRows.filter(a=>a.staffId===me.id&&a.status==='completed').length;
+    $('agenda-day-count').textContent=`Tus citas: ${myActive.length} programada${myActive.length===1?'':'s'} · ${myDone} realizada${myDone===1?'':'s'} · Salón total: ${active.length}`;
+  } else {
+    $('agenda-day-count').textContent=`${active.length} programada${active.length===1?'':'s'} (${confirmed} confirm.) · ${done} realizadas${noShows?` · ${noShows} no asistió`:''}`;
+  }
 
   const rows=dayRows.filter(matchesFilter);
-  const poolRows=rows.filter(a=>!a.staffId);
+  const allPool=rows.filter(a=>!a.staffId);
+  const poolRows=onlyMine?allPool.filter(a=>{const svc=services.find(s=>s.id===a.serviceId);return !svc||!!resolveCap(me.id,svc);}):allPool;
   const poolLane=$('agenda-pool-lane');poolLane.replaceChildren();
   poolLane.hidden=poolRows.length===0;
   if(poolRows.length){
-    poolLane.append(node('h3',`Por asignar según orden de llegada física (${poolRows.length})`));
+    poolLane.append(node('h3',onlyMine?`Citas por turno que puedes atender (${poolRows.length})`:`Por asignar según orden de llegada (${poolRows.length})`));
     const wrap=node('div',undefined,'pool-cards');
     for(const a of poolRows)wrap.append(buildAppointmentCard(a));
     poolLane.append(wrap);
   }
 
   const board=$('agenda-board');board.replaceChildren();
-  const workingStaff=staff.filter(s=>s.active&&s.canHoldAppointments&&staffDayStatus(s,date).working);
-  const assignedStaffIds=new Set(rows.filter(a=>a.staffId).map(a=>a.staffId));
-  const columns=[...workingStaff];
-  for(const m of staff){if(assignedStaffIds.has(m.id)&&!columns.some(c=>c.id===m.id))columns.push(m);}
+  let columns=[];
+  if(onlyMine){
+    columns=[me];
+  } else {
+    const workingStaff=staff.filter(s=>s.active&&s.canHoldAppointments&&staffDayStatus(s,date).working);
+    const assignedStaffIds=new Set(rows.filter(a=>a.staffId).map(a=>a.staffId));
+    columns=[...workingStaff];
+    for(const m of staff){if(assignedStaffIds.has(m.id)&&!columns.some(c=>c.id===m.id))columns.push(m);}
+  }
 
-  const hasAny=rows.length>0||columns.length>0;
-  $('agenda-empty').hidden=rows.length>0;
+  const visibleRows=onlyMine?rows.filter(a=>a.staffId===me.id||poolRows.includes(a)):rows;
+  const hasAny=visibleRows.length>0||columns.length>0;
+  $('agenda-empty').hidden=visibleRows.length>0;
   board.hidden=!hasAny;
 
   for(const col of columns){
-    const colEl=node('section',undefined,'staff-column');
+    const colEl=node('section',undefined,'staff-column'+(me&&col.id===me.id?' my-column':''));
     const st=staffDayStatus(col,date);
     const sh=dailyShifts.find(s=>s.staffId===col.id&&s.status==='present');
     const head=node('header',undefined,'staff-column-head');
-    head.append(node('h3',`${sh?sh.turnOrder+'.º · ':''}${col.shortName||col.displayName}`),node('small',st.working?(col.seniorityTier==='junior'?'Colorista junior / Asistente':'Estilista titular'):`No labora (${st.reason})`));
+    head.append(node('h3',`${sh?sh.turnOrder+'.º · ':''}${col.shortName||col.displayName}${me&&col.id===me.id?' (Tú)':''}`),node('small',st.working?(ROLE_LABELS[col.role]||'Estilista'):`No labora (${st.reason})`));
     colEl.append(head);
     const colRows=rows.filter(a=>a.staffId===col.id);
     if(!colRows.length){
@@ -322,7 +407,10 @@ async function load(forceBootstrap=false){
     const hoursTxt=`Horario del salón: ${preferences.openTime} a ${preferences.closeTime}`;
     $('agenda-hours-label').textContent=hoursTxt;
     if($('agenda-hours-readonly'))$('agenda-hours-readonly').textContent=hoursTxt;
-    render();message('Agenda al día.');
+    render();
+    if(location.hash==='#equipo')renderTeamPage();
+    message('Agenda al día.');
+    window.dispatchEvent(new CustomEvent('touche:agenda-updated',{detail:{appointments,date}}));
   }catch(e){message(e.message,true);}
   finally{loading=false;$('agenda-refresh').disabled=false;$('agenda-new').disabled=!preferences;}
 }
@@ -406,7 +494,57 @@ function refreshStaffOptions(preserveId=null){
   }
   select.required=mode==='requested';
   select.value=prev&&[...select.options].some(o=>o.value===prev&&!o.disabled)?prev:'';
-  const availCount=candidates.filter(c=>c.ok).length;
+  const eligible=svc?candidates.filter(c=>c.cap):candidates;
+  const available=eligible.filter(c=>c.ok);
+  const excluded=svc?candidates.filter(c=>!c.cap):[];
+  const recBox=$('appointment-recommendation');
+  if(recBox){
+    recBox.replaceChildren();
+    if(!svc){
+      recBox.hidden=true;
+    } else {
+      recBox.hidden=false;
+      recBox.className='appt-recommendation'+(available.length?'':' warn');
+      if(available.length){
+        const best=available[0];
+        recBox.append(node('strong',`Recomendada por especialidad: ${best.m.displayName} (${CAP_LABELS[best.cap]||'Disponible'}${best.turn?` · ${best.turn}.º turno`:''})`));
+        const whoText=`Disponibles para ${svc.name}: ${available.map(c=>c.m.shortName||c.m.displayName).join(', ')}.`+(excluded.length?` No realizan este servicio: ${excluded.map(c=>c.m.shortName||c.m.displayName).join(', ')}.`:'');
+        recBox.append(node('small',whoText));
+        const actions=node('div',undefined,'appt-rec-actions');
+        const pickBest=node('button','Elegir recomendada','primary tiny-btn');pickBest.type='button';pickBest.id='appointment-pick-best';
+        pickBest.addEventListener('click',()=>{
+          const reqRadio=document.querySelector('input[name=assignmentMode][value=requested]');
+          if(reqRadio)reqRadio.checked=true;
+          select.required=true;select.value=best.m.id;
+          $('appointment-staff-hint').textContent=`Seleccionada: ${best.m.displayName} (recomendada para ${svc.name}).`;
+        });
+        const pickRand=node('button','Elegir al azar entre disponibles','tiny-btn');pickRand.type='button';pickRand.id='appointment-pick-random';
+        pickRand.addEventListener('click',()=>{
+          const reqRadio=document.querySelector('input[name=assignmentMode][value=requested]');
+          if(reqRadio)reqRadio.checked=true;
+          const pool=available.length>1?available.filter(c=>c.m.id!==select.value):available;
+          const chosen=pool[Math.floor(Math.random()*pool.length)]||available[0];
+          select.required=true;select.value=chosen.m.id;
+          $('appointment-staff-hint').textContent=available.length===1
+            ?`Solo ${chosen.m.displayName} está disponible y habilitada para ${svc.name} en este horario.`
+            :`Elegida al azar entre especialistas de ${svc.name}: ${chosen.m.displayName} (${CAP_LABELS[chosen.cap]||'Disponible'}).`;
+        });
+        actions.append(pickBest,pickRand);
+        recBox.append(actions);
+      } else if(eligible.length){
+        recBox.append(
+          node('strong',`Sin especialistas libres para ${svc.name} en este horario`),
+          node('small',`Quienes realizan este servicio: ${eligible.map(c=>`${c.m.shortName||c.m.displayName} (${c.why})`).join(' · ')}. Prueba otra hora o día.`)
+        );
+      } else {
+        recBox.append(
+          node('strong',`Nadie tiene habilitado ${svc.name} todavía`),
+          node('small','Puedes asignar esta especialidad en la sección Colaboradoras.')
+        );
+      }
+    }
+  }
+  const availCount=available.length;
   $('appointment-staff-hint').textContent=svc
     ?(availCount?`${availCount} colaboradora${availCount===1?'':'s'} habilitada${availCount===1?'':'s'} disponible${availCount===1?'':'s'} en este horario.`:'Ninguna colaboradora habilitada libre en este horario.')
     :'Elige primero un servicio para filtrar por especialidad y disponibilidad.';
@@ -414,6 +552,13 @@ function refreshStaffOptions(preserveId=null){
 
 function openEditor(a=null){
   if(!preferences||loading)return;
+  if(Array.isArray(store.clients)&&store.clients.length){
+    const byId=new Map(clients.map(c=>[c.id,c]));
+    for(const sc of store.clients){
+      if(!byId.has(sc.id))clients.push({id:sc.id,name:sc.name,dni:sc.dni||'',phone:sc.phone||'',lastVisit:sc.lastVisit||null,lastService:null,lastTechNote:null,noShowCount:0});
+      else{const cur=byId.get(sc.id);cur.name=sc.name;cur.dni=sc.dni||cur.dni;cur.phone=sc.phone||cur.phone;}
+    }
+  }
   editingAppointment=a;
   $('appointment-client-status').textContent='Añade su ficha aquí y continúa con la cita.';
   $('appointment-form').reset();$('appointment-error').hidden=true;
@@ -653,10 +798,20 @@ function openStaffDelete(member){
   $('staff-delete-modal').showModal();
 }
 
-function renderServiceDurations(){
-  const q=clean($('service-duration-search').value).trim();
-  const list=$('service-duration-list');list.replaceChildren();
+function setTeamStatus(msg){
+  if($('team-page-status'))$('team-page-status').textContent=msg;
+  if($('staff-settings-status'))$('staff-settings-status').textContent=msg;
+}
+
+function renderDurationsInto(listEl,rawQuery,statusEl){
+  if(!listEl)return;
+  const q=clean(rawQuery||'').trim();
+  listEl.replaceChildren();
   const filtered=services.filter(s=>!q||clean(s.name).includes(q)||clean(s.category).includes(q)).slice(0,30);
+  if(!filtered.length){
+    listEl.append(node('p','No encontramos servicios con ese nombre.','field-help'));
+    return;
+  }
   for(const s of filtered){
     const row=node('div',undefined,'service-dur-row');
     row.append(node('span',`${s.category} · ${s.name}`));
@@ -668,15 +823,105 @@ function renderServiceDurations(){
       try{
         const res=await api('/api/services/'+s.id,{method:'PATCH',body:JSON.stringify({durationMinutes:minI.value===''?null:Number(minI.value),durationMaxMinutes:maxI.value===''?null:Number(maxI.value)})});
         s.durationMinutes=res.durationMinutes;s.durationMaxMinutes=res.durationMaxMinutes;
-        $('staff-settings-status').textContent=`Duración actualizada: ${s.name}.`;
-      }catch(e){$('staff-settings-status').textContent=e.message;}
+        if(statusEl)statusEl.textContent=`Duración actualizada: ${s.name}.`;
+        setTeamStatus(`Duración actualizada: ${s.name}.`);
+      }catch(e){if(statusEl)statusEl.textContent=e.message;}
       finally{btn.disabled=false;}
     });
-    row.append(minI,maxI,btn);list.append(row);
+    row.append(minI,maxI,btn);listEl.append(row);
   }
 }
 
+function renderServiceDurations(){
+  renderDurationsInto($('service-duration-list'),$('service-duration-search')?.value||'',$('staff-settings-status'));
+}
+
+function renderTeamPage(){
+  const grid=$('team-page-grid');
+  if(!grid)return;
+  grid.replaceChildren();
+  const inWrap=$('team-inactive-wrap'),inGrid=$('team-inactive-grid');
+  if(inGrid)inGrid.replaceChildren();
+  const actives=staff.filter(m=>m.active);
+  const inactives=staff.filter(m=>!m.active);
+  const ini=name=>String(name||'T').trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'T';
+
+  actives.forEach((m,i)=>{
+    const card=node('article',undefined,'team-member-card');
+    const head=node('div',undefined,'team-card-head');
+    head.append(node('span',ini(m.displayName),'avatar tone-'+(i%5)));
+    const titleBox=node('div');
+    titleBox.append(
+      node('strong',`${m.displayName}${m.shortName&&m.shortName!==m.displayName?` (${m.shortName})`:''}`),
+      node('small',`${ROLE_LABELS[m.role]||m.role} · ${m.restWeekday===null||m.restWeekday===undefined?'Sin descanso fijo':'Descansa '+WEEKDAYS[m.restWeekday]}`)
+    );
+    head.append(titleBox);
+    card.append(head);
+
+    if(m.specialtySummary)card.append(node('p',m.specialtySummary,'team-card-summary'));
+
+    const chips=node('div',undefined,'team-cap-chips');
+    if(!m.canHoldAppointments){
+      chips.append(node('span','No atiende citas en agenda','mini-tag soft'));
+    } else {
+      const cats=categoryCaps.filter(c=>c.staffId===m.id);
+      const ovrs=serviceOverrides.filter(o=>o.staffId===m.id);
+      for(const c of cats){
+        const cls=c.capabilityLevel==='plan_b'?'mini-tag warn':c.capabilityLevel==='junior'?'mini-tag soft':'mini-tag';
+        const lbl=c.capabilityLevel==='primary'?c.category:`${c.category} (${CAP_LABELS[c.capabilityLevel]||c.capabilityLevel})`;
+        chips.append(node('span',lbl,cls));
+      }
+      for(const o of ovrs){
+        const svc=services.find(s=>s.id===o.serviceId);
+        const sName=svc?svc.name:o.serviceId;
+        if(o.capabilityLevel==='disabled')chips.append(node('span',`Sin ${sName}`,'mini-tag danger'));
+        else chips.append(node('span',`+ ${sName}${o.capabilityLevel!=='primary'?` (${CAP_LABELS[o.capabilityLevel]||o.capabilityLevel})`:''}`,'mini-tag soft'));
+      }
+      if(!cats.length&&!ovrs.length)chips.append(node('span','Sin servicios asignados aún','mini-tag warn'));
+    }
+    card.append(chips);
+
+    const actions=node('div',undefined,'team-card-actions');
+    const editBtn=node('button','Editar y servicios','outline-button tiny-btn');editBtn.type='button';
+    editBtn.addEventListener('click',()=>openStaffEditor(m));
+    const delBtn=node('button','Retirar','tiny-btn danger-outline');delBtn.type='button';
+    delBtn.addEventListener('click',()=>openStaffDelete(m));
+    actions.append(editBtn,delBtn);
+    card.append(actions);
+    grid.append(card);
+  });
+
+  if(inWrap&&inGrid){
+    inWrap.hidden=inactives.length===0;
+    for(const m of inactives){
+      const card=node('article',undefined,'team-member-card inactive');
+      const head=node('div',undefined,'team-card-head');
+      head.append(node('span',ini(m.displayName),'avatar'));
+      const titleBox=node('div');
+      titleBox.append(node('strong',m.displayName),node('small',`${ROLE_LABELS[m.role]||m.role} · Retirada del equipo activo`));
+      head.append(titleBox);
+      card.append(head);
+      const actions=node('div',undefined,'team-card-actions');
+      const restoreBtn=node('button','Reactivar en el equipo','outline-button tiny-btn');restoreBtn.type='button';
+      restoreBtn.addEventListener('click',async()=>{
+        restoreBtn.disabled=true;
+        try{
+          await api('/api/staff/'+encodeURIComponent(m.id),{method:'PATCH',body:JSON.stringify({active:true})});
+          await load();renderTeamPage();if($('staff-modal')?.open)renderStaffModal();
+          setTeamStatus(`${m.displayName} volvió al equipo activo.`);
+        }catch(e){setTeamStatus(e.message);restoreBtn.disabled=false;}
+      });
+      actions.append(restoreBtn);
+      card.append(actions);
+      inGrid.append(card);
+    }
+  }
+  renderDurationsInto($('team-duration-list'),$('team-duration-search')?.value||'',$('team-page-status'));
+}
+
 $('staff-add-btn').addEventListener('click',()=>openStaffEditor(null));
+$('team-add-btn')?.addEventListener('click',()=>openStaffEditor(null));
+$('team-duration-search')?.addEventListener('input',debounce(()=>renderDurationsInto($('team-duration-list'),$('team-duration-search').value,$('team-page-status')),150));
 $('staff-edit-role').addEventListener('change',()=>{
   const isRec=$('staff-edit-role').value==='reception';
   $('staff-edit-holds').checked=!isRec;
@@ -719,10 +964,10 @@ $('staff-editor-form').addEventListener('submit',async e=>{
       shared=r1.sharedRestWith||[];
     }
     $('staff-editor-modal').close();
-    await load();renderStaffModal();
-    $('staff-settings-status').textContent=shared.length
+    await load();renderTeamPage();if($('staff-modal')?.open)renderStaffModal();
+    setTeamStatus(shared.length
       ?`Guardado. Aviso: comparte día de descanso con ${shared.join(', ')}.`
-      :(id?'Colaboradora y servicios actualizados.':'Nueva colaboradora agregada al equipo.');
+      :(id?'Colaboradora y servicios actualizados.':'Nueva colaboradora agregada al equipo.'));
   }catch(err){
     $('staff-editor-error').textContent=err.message;$('staff-editor-error').hidden=false;
   }finally{
@@ -736,8 +981,8 @@ $('staff-delete-confirm').addEventListener('click',async()=>{
   try{
     const res=await api('/api/staff/'+encodeURIComponent(pendingDeleteStaff.id),{method:'DELETE'});
     $('staff-delete-modal').close();pendingDeleteStaff=null;
-    await load();renderStaffModal();
-    $('staff-settings-status').textContent=res.message||'Colaboradora retirada del equipo.';
+    await load();renderTeamPage();if($('staff-modal')?.open)renderStaffModal();
+    setTeamStatus(res.message||'Colaboradora retirada del equipo.');
   }catch(err){
     $('staff-delete-error').textContent=err.message;$('staff-delete-error').hidden=false;
     btn.disabled=false;
@@ -781,7 +1026,7 @@ $('exception-form').addEventListener('submit',async e=>{
   finally{b.disabled=false;}
 });
 
-$('agenda-team-btn').addEventListener('click',()=>{renderStaffModal();$('staff-modal').showModal();});
+$('agenda-team-btn').addEventListener('click',()=>{location.hash='#equipo';});
 $('agenda-exception-btn').addEventListener('click',()=>{renderExceptionModal();$('exception-modal').showModal();});
 $('service-duration-search').addEventListener('input',debounce(renderServiceDurations,150));
 for(const id of ['staff-modal-close','staff-modal-done'])$(id).addEventListener('click',()=>$('staff-modal').close());
@@ -797,9 +1042,26 @@ for(const btn of document.querySelectorAll('[data-agenda-filter]'))btn.addEventL
   document.querySelectorAll('[data-agenda-filter]').forEach(b=>{b.classList.toggle('selected',b===btn);b.setAttribute('aria-pressed',String(b===btn));});
   render();
 });
+for(const btn of document.querySelectorAll('[data-agenda-scope]'))btn.addEventListener('click',()=>{
+  agendaScope=btn.dataset.agendaScope;
+  scopeInitialized=true;
+  syncScopeUI();
+  render();
+});
 $('agenda-day-notes').addEventListener('input',()=>{noteDirty=true;$('agenda-note-status').textContent='Cambios sin guardar';});
 $('agenda-save-notes').addEventListener('click',async()=>{const b=$('agenda-save-notes'),savedDate=date,notes=$('agenda-day-notes').value;b.disabled=true;try{await api('/api/agenda/notes',{method:'PATCH',body:JSON.stringify({date:savedDate,notes})});if(date===savedDate&&$('agenda-day-notes').value===notes){noteDirty=false;$('agenda-note-status').textContent='Notas guardadas.';}}catch(e){if(date===savedDate)$('agenda-note-status').textContent=e.message;}finally{b.disabled=false;}});
 $('agenda-hours-form').addEventListener('submit',async e=>{e.preventDefault();const b=$('agenda-save-hours');b.disabled=true;try{preferences=await api('/api/agenda/preferences',{method:'PATCH',body:JSON.stringify({openTime:$('agenda-open').value,closeTime:$('agenda-close').value,weekdays:[...document.querySelectorAll('[data-agenda-weekday]:checked')].map(x=>Number(x.value))})});message('Horario guardado. Se aplicará a las próximas citas.');const hoursTxt=`Horario del salón: ${preferences.openTime} a ${preferences.closeTime}`;$('agenda-hours-label').textContent=hoursTxt;if($('agenda-hours-readonly'))$('agenda-hours-readonly').textContent=hoursTxt;}catch(e){message(e.message,true);}finally{b.disabled=false;}});
 window.addEventListener('beforeunload',e=>{if(noteDirty){e.preventDefault();e.returnValue='';}});
-window.addEventListener('hashchange',()=>{if(location.hash==='#agenda')load();});
+window.addEventListener('touche:data-changed',()=>{bootstrapped=false;});
+window.addEventListener('touche:session-ready',()=>{if(staff.length){scopeInitialized=false;render();if(location.hash==='#equipo')renderTeamPage();}});
+window.addEventListener('hashchange',()=>{
+  if(location.hash==='#agenda')load();
+  else if(location.hash==='#equipo'){if(bootstrapped)renderTeamPage();load();}
+});
 if(location.hash==='#agenda')load();
+else if(location.hash==='#equipo')load();
+setInterval(()=>{
+  if(!document.hidden&&!loading&&location.hash==='#agenda'&&!$('appointment-editor')?.open&&!$('staff-editor-modal')?.open&&!$('exception-modal')?.open){
+    load(false);
+  }
+},60000);
