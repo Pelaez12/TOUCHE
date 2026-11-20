@@ -29,7 +29,7 @@ function renderServicePills(categories){
   wrap.replaceChildren();
   const activeCat=$('category').value;
   for(const cat of ['', ...categories]){
-    const btn=text('button',cat||'Todos los servicios','service-pill-btn'+(cat===activeCat?' selected':''));
+    const btn=text('button',cat||'✨ Todos los servicios','service-pill-btn senior-svc-pill'+(cat===activeCat?' selected':''));
     btn.type='button';
     btn.setAttribute('aria-pressed',String(cat===activeCat));
     btn.addEventListener('click',()=>{
@@ -80,14 +80,18 @@ function compute() {
     $('rate').textContent=pct;
     $('meter').style.width=`${(current.rate||0)*100}%`;
     $('export').disabled=current.total===0;
-    for(const key of ['contact','missing','review','care'])$('todo-'+key).textContent=current.rows.filter(row=>suggestedAction(row).key===key).length;
+    for(const key of ['contact','missing','review','care']){
+      const el=$('todo-'+key);
+      if(el) el.textContent=current.rows.filter(row=>suggestedAction(row).key===key).length;
+    }
+    if($('todo-pending')) $('todo-pending').textContent=current.notReturned;
     updateReturnTabCounts(current.rows);
     const readyWa=current.rows.filter(row=>suggestedAction(row).key==='contact').length;
     const catLabel=$('category').value?` en ${$('category').value}`:'';
     if($('return-human-summary')){
       $('return-human-summary').textContent=current.total
-        ?`De ${current.total} clienta${current.total===1?'':'s'} que vinieron${catLabel}, ${current.returned} ya volvieron (${pct}) y ${current.notReturned} aún no regresan.${readyWa?` Tienes ${readyWa} lista${readyWa===1?'':'s'} para invitar por WhatsApp hoy.`:''}`
-        :'No hay visitas registradas en el período elegido. Prueba con «Últimos 3 meses» o «2025 vs 2026».';
+        ?`De ${current.total} clienta${current.total===1?'':'s'} que vinieron${catLabel}, ${current.returned} ya volvieron (${pct}) y ${current.notReturned} aún no regresan.${readyWa?` ¡Tienes ${readyWa} lista${readyWa===1?'':'s'} para invitar por WhatsApp hoy!`:''}`
+        :'No hay visitas registradas en el período elegido. Prueba tocando «Últimos 3 meses» o «2025 vs 2026».';
     }
     const categories=[...new Set(data.events.map(e=>e.category))].sort();
     renderServicePills(categories);
@@ -99,7 +103,11 @@ function compute() {
     $('meter').style.width='0%';$('rows').replaceChildren();$('more').hidden=true;
     $('result-count').textContent='Ajusta las fechas para ver el retorno.';
     $('empty').hidden=true;
-    for(const key of ['contact','missing','review','care'])$('todo-'+key).textContent='—';
+    for(const key of ['contact','missing','review','care']){
+      const el=$('todo-'+key);
+      if(el) el.textContent='—';
+    }
+    if($('todo-pending')) $('todo-pending').textContent='—';
     updateReturnTabCounts([]);
   }
 }
@@ -116,24 +124,39 @@ function renderRows() {
   $('more').textContent=`Mostrar más (${Math.min(limit,rows.length)} de ${rows.length})`;
   for(const row of rows.slice(0,limit)) {
     const tr=document.createElement('tr');
-    const person=text('div','','client');
-    person.append(text('span',row.name.split(/\s+/).slice(0,2).map(s=>s[0]).join(''),'avatar'));
-    const name=text('div','');name.append(text('strong',row.name),text('small',row.phone||'Teléfono pendiente'));person.append(name);
-    const services=text('div','','last-service-cell');row.lastServices.forEach((service,i)=>{if(i)services.append(' ');services.append(text('span',service,'service'));});
-    services.append(text('small',fmt(row.latestVisit),'last-service-date'));
-    const badge=text('span',row.returned?'Regresó':row.uncertain?'Por revisar':'Aún no vuelve',`badge ${row.returned?'good':row.uncertain?'review':''}`);
-    const hist=text('button','Historial','view');hist.type='button';
+    tr.className='senior-data-row';
+    const person=text('div','','client senior-client-cell');
+    person.append(text('span',row.name.split(/\s+/).slice(0,2).map(s=>s[0]).join(''),'avatar senior-avatar tone-1'));
+    const name=text('div','');
+    name.append(text('strong',row.name,'senior-client-name'),text('small',row.phone||'Teléfono pendiente','senior-client-phone'));
+    person.append(name);
+    const services=text('div','','last-service-cell senior-service-cell');
+    row.lastServices.forEach((service,i)=>{if(i)services.append(' ');services.append(text('span',service,'service senior-service-tag'));});
+    services.append(text('small',fmt(row.latestVisit),'last-service-date senior-date-tag'));
+    const badge=text('span',row.returned?'Regresó':row.uncertain?'Por revisar':'Aún no vuelve',`badge senior-badge ${row.returned?'good':row.uncertain?'review':''}`);
+    const hist=text('button','📋 Ver Historial','view senior-action-btn senior-btn-hist');hist.type='button';
+    hist.title='Ver historial completo de '+row.name;
     hist.addEventListener('click',()=>window.dispatchEvent(new CustomEvent('touche:open-client-history',{detail:{id:row.id}})));
-    const action=suggestedAction(row),next=text('div','','next-action');next.append(text('strong',action.label),text('small',action.description));
-    const actions=text('div','','return-actions');
+    const action=suggestedAction(row),next=text('div','','next-action senior-next-action');
+    next.append(text('strong',action.label,'senior-action-label'),text('small',action.description,'senior-action-desc'));
+    const actions=text('div','','return-actions senior-return-actions');
     if(!whatsappPhone(row.phone)){
-      const edit=text('button','Completar teléfono','outline-button');edit.type='button';edit.addEventListener('click',()=>editClient(row));actions.append(edit);
+      const edit=text('button','✏️ Completar número','outline-button senior-action-btn senior-btn-edit-phone');
+      edit.type='button';
+      edit.title='Agregar número de teléfono para WhatsApp';
+      edit.addEventListener('click',()=>editClient(row));
+      actions.append(edit);
     }else{
-      const message=text('button','Escribir por WhatsApp','message-button');message.type='button';message.addEventListener('click',()=>composeMessage(row));actions.append(message);
+      const message=text('button','💬 Escribir WhatsApp','message-button senior-action-btn senior-btn-wa');
+      message.type='button';
+      message.title='Enviar mensaje de WhatsApp a '+row.name;
+      message.addEventListener('click',()=>composeMessage(row));
+      actions.append(message);
     }
     actions.append(hist);
     const daysText=row.days===0?'Hoy':`Hace ${row.days} día${row.days===1?'':'s'}`;
-    tr.append(td(person),td(services),td(daysText),td(badge),td(next),td(actions));$('rows').append(tr);
+    const daysCell=text('span',daysText,'senior-days-badge');
+    tr.append(td(person),td(services),td(daysCell),td(badge),td(next),td(actions));$('rows').append(tr);
   }
 }
 function detail(row) {

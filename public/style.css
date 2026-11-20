@@ -315,3 +315,909 @@ table,.stats strong,.history-count-pill,.history-stat-mini strong,.date-cell{fon
 .salon-notif-card h4{margin:6px 0 2px;font-size:13px;font-weight:600;color:var(--ink)}
 .salon-notif-svc{margin:0;font-size:11px;color:var(--muted)}
 @media(max-width:700px){.salon-notifs-btn>span:not(.icon){display:none}.return-presets-row{flex-direction:column;align-items:flex-start}.return-service-pills{padding-inline:14px}.client-history-stats{grid-template-columns:1fr}.staff-editor-footer{flex-wrap:wrap}}
+
+/* ==========================================================================
+   ACCESIBILIDAD Y DISEÑO PARA ADULTOS MAYORES (TOUCHÉ SENIOR FRIENDLY)
+   Botones grandes (>=48-56px), alto contraste, tipografía cómoda (15-18px),
+   asistente paso a paso visual y cero elementos diminutos.
+   ========================================================================== */
+
+/* Banner de asistencia visual amigable */
+.senior-guide-banner{
+  background:linear-gradient(135deg, #fdf8f4, #fff);
+  border:2px solid #e8d7cc;
+  border-radius:12px;
+  padding:16px 20px;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  margin-bottom:24px;
+  box-shadow:0 2px 10px #4b36230a;
+}
+.senior-guide-icon{
+  font-size:28px;
+  flex:none;
+  line-height:1;
+}
+.senior-guide-banner strong{
+  display:block;
+  font-size:15px;
+  font-weight:700;
+  color:#6c3d38;
+}
+.senior-guide-banner p{
+  margin:4px 0 0;
+  font-size:13.5px;
+  color:#4a3f3b;
+  line-height:1.55;
+}
+
+/* Tarjetas de paso a paso para Retorno */
+.return-step-card{
+  background:#fff;
+  border:2px solid #e2d6cf;
+  border-radius:14px;
+  padding:22px 24px;
+  margin-bottom:24px;
+  box-shadow:0 3px 12px #3c292108;
+}
+.step-card-header{
+  display:flex;
+  align-items:flex-start;
+  gap:14px;
+  margin-bottom:18px;
+}
+.step-num-pill{
+  display:inline-grid;
+  place-items:center;
+  background:#ac6660;
+  color:#fff;
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:0.8px;
+  padding:6px 14px;
+  border-radius:999px;
+  white-space:nowrap;
+  flex:none;
+  margin-top:2px;
+}
+.step-num-pill.mini{
+  font-size:11px;
+  padding:4px 10px;
+  margin-bottom:8px;
+}
+.step-card-header h2{
+  font-size:19px;
+  font-weight:700;
+  color:#241f1d;
+  margin:0 0 5px;
+  line-height:1.4;
+}
+.step-card-header p{
+  font-size:14px;
+  color:#5d524e;
+  margin:0;
+  line-height:1.55;
+}
+
+/* Paso 1: Botones de períodos grandes y claros */
+.senior-quick-bar{
+  border:0;
+  padding:0;
+  margin-bottom:0;
+}
+.senior-preset-row{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(210px, 1fr));
+  gap:12px;
+  margin-bottom:14px;
+}
+.senior-period-btn{
+  min-height:68px;
+  padding:14px 18px;
+  border-radius:12px;
+  border:2px solid #ddd1ca;
+  background:#faf7f5;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:center;
+  text-align:left;
+  gap:3px;
+  cursor:pointer;
+  transition:all 0.15s ease-out;
+}
+.senior-period-btn:hover{
+  background:#f4ece7;
+  border-color:#ac6660;
+}
+.senior-period-btn.selected{
+  background:#ac6660;
+  border-color:#ac6660;
+  color:#fff;
+  box-shadow:0 3px 10px #ac666030;
+}
+.senior-btn-icon{
+  font-size:20px;
+  line-height:1;
+  margin-bottom:2px;
+}
+.senior-btn-title{
+  font-size:15px;
+  font-weight:700;
+  color:#25201e;
+}
+.senior-period-btn.selected .senior-btn-title{
+  color:#fff;
+}
+.senior-btn-desc{
+  font-size:12.5px;
+  color:#6b5f5b;
+}
+.senior-period-btn.selected .senior-btn-desc{
+  color:#fae8e5;
+}
+.senior-summary-box{
+  background:#fdf8f4;
+  border:2px solid #e7d4c9;
+  border-radius:10px;
+  padding:16px 20px;
+  font-size:15px;
+  font-weight:600;
+  color:#3a2c26;
+  line-height:1.65;
+  margin-top:16px;
+}
+.senior-cutoff-text{
+  font-size:12.5px;
+  color:#6c605c;
+  margin-top:10px;
+}
+
+/* Indicadores KPI interactivos para personas mayores */
+.senior-stats-grid{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:14px;
+  margin-top:20px;
+  margin-bottom:0;
+}
+.senior-kpi-card{
+  min-height:115px;
+  padding:18px 20px;
+  border-radius:12px;
+  border:2px solid #e2d6cf;
+  background:#fff;
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  transition:transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.senior-kpi-card:hover{
+  transform:translateY(-2px);
+  border-color:#ac6660;
+  box-shadow:0 4px 14px #4b362312;
+}
+.senior-kpi-card p{
+  font-size:13.5px;
+  font-weight:600;
+  color:#554c48;
+  margin:0 0 8px;
+  line-height:1.4;
+}
+.senior-kpi-card strong{
+  font-size:34px;
+  font-weight:800;
+  color:#25201e;
+  letter-spacing:-0.5px;
+  margin:4px 0 10px;
+  line-height:1;
+}
+.senior-kpi-card small{
+  font-size:12px;
+  font-weight:600;
+  color:#8d4945;
+  line-height:1.4;
+}
+.senior-kpi-card.kpi-success strong{
+  color:#2e7d32;
+}
+.senior-kpi-card.kpi-warning strong{
+  color:#d97706;
+}
+.senior-kpi-card.kpi-rate{
+  background:#faf4ef;
+  border-color:#ecd9ce;
+}
+
+/* Paso 2: Chips de servicio grandes */
+.senior-service-chips{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  padding:0;
+}
+.senior-svc-pill{
+  min-height:48px;
+  padding:10px 18px;
+  font-size:14px;
+  font-weight:600;
+  border-radius:999px;
+  border:2px solid #ddd1ca;
+  background:#faf7f5;
+  color:#3e3632;
+  cursor:pointer;
+  transition:all 0.15s ease;
+}
+.senior-svc-pill:hover{
+  background:#f4ece7;
+  border-color:#ac6660;
+  color:#25201e;
+}
+.senior-svc-pill.selected{
+  background:#904d47;
+  border-color:#904d47;
+  color:#fff;
+  box-shadow:0 2px 8px #904d4730;
+}
+
+/* Paso 3: Tarjetas de acción para invitar */
+.senior-action-grid{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:12px;
+}
+.senior-action-tile{
+  min-height:92px;
+  padding:16px 18px;
+  border-radius:12px;
+  border:2px solid #ded3cb;
+  background:#faf7f5;
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  gap:12px;
+  text-align:left;
+  cursor:pointer;
+  transition:all 0.15s ease;
+}
+.senior-action-tile:hover{
+  border-color:#ac6660;
+  background:#f6ece6;
+}
+.senior-action-tile.active-card{
+  border-color:#ac6660;
+  background:#fcf5f1;
+  box-shadow:0 0 0 2px #ac666033;
+}
+.tile-icon{
+  font-size:26px;
+  line-height:1;
+}
+.tile-title{
+  font-size:14.5px;
+  font-weight:700;
+  color:#25201e;
+  display:block;
+  line-height:1.3;
+}
+.tile-desc{
+  font-size:12px;
+  color:#6c605b;
+  display:block;
+  margin-top:3px;
+  line-height:1.4;
+}
+.tile-badge{
+  font-size:28px;
+  font-weight:800;
+  color:#8d4945;
+  line-height:1;
+}
+.tile-wa:hover, .tile-wa.active-card{
+  border-color:#2e7d32;
+  background:#f1f8f2;
+}
+.tile-wa .tile-badge{
+  color:#2e7d32;
+}
+.tile-pending:hover, .tile-pending.active-card{
+  border-color:#d97706;
+}
+.tile-care:hover, .tile-care.active-card{
+  border-color:#2e7d32;
+}
+
+/* Paso 4 / Resultados: Filtros y Tabla */
+.senior-results-section{
+  border:2px solid #e2d6cf;
+  border-radius:14px;
+  background:#fff;
+  margin-top:24px;
+  overflow:hidden;
+}
+.senior-section-top{
+  padding:22px 24px 18px;
+  background:#faf7f5;
+  border-bottom:1px solid #ebdacf;
+}
+.senior-section-top h2{
+  font-size:18px;
+  font-weight:700;
+  color:#241f1d;
+  margin:0 0 4px;
+}
+.senior-section-top p{
+  font-size:13px;
+  color:#60544f;
+  margin:0;
+}
+.senior-filters{
+  gap:12px;
+}
+.senior-search-input{
+  min-height:50px;
+  font-size:15px;
+  border:2px solid #d8ccc4;
+  border-radius:9px;
+  padding:10px 16px;
+  background:#fff;
+}
+.senior-search-input:focus{
+  border-color:#ac6660;
+  outline:3px solid #ac666030;
+}
+.senior-status-tabs{
+  padding:16px 24px 14px;
+  gap:8px;
+  border-bottom:1px solid #efe5de;
+}
+.senior-tab-btn{
+  min-height:44px;
+  padding:8px 16px;
+  font-size:13.5px;
+  font-weight:600;
+  border-radius:8px;
+  border:1px solid #ddd1ca;
+  background:#faf7f5;
+  color:#554c48;
+  cursor:pointer;
+}
+.senior-tab-btn:hover{
+  background:#f4ece7;
+  color:#25201e;
+}
+.senior-tab-btn.selected{
+  background:#ac6660;
+  border-color:#ac6660;
+  color:#fff;
+  font-weight:700;
+}
+
+/* Filas y celdas de tabla para personas mayores */
+.senior-table-wrap table{
+  min-width:960px;
+}
+.senior-table-wrap th{
+  font-size:13px;
+  font-weight:700;
+  color:#4c413c;
+  background:#faf6f3;
+  padding:16px 18px;
+  border-bottom:2px solid #e5d8d0;
+}
+.senior-data-row td{
+  padding:16px 18px;
+  vertical-align:middle;
+  border-bottom:1px solid #eee5df;
+  font-size:14px;
+}
+.senior-data-row:hover{
+  background:#fdfaf8;
+}
+.senior-client-cell{
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+.senior-avatar{
+  width:44px;
+  height:44px;
+  font-size:14px;
+  font-weight:700;
+  border-radius:50%;
+  flex:none;
+}
+.senior-client-name{
+  display:block;
+  font-size:15.5px;
+  font-weight:700;
+  color:#201c1a;
+  line-height:1.35;
+}
+.senior-client-phone{
+  display:block;
+  font-size:13.5px;
+  color:#544a46;
+  margin-top:3px;
+  font-variant-numeric:tabular-nums;
+}
+.senior-dni-pill{
+  display:inline-block;
+  font-size:12px;
+  color:#6f645f;
+  margin-top:2px;
+}
+.senior-service-cell{
+  min-width:180px;
+}
+.senior-service-tag{
+  font-size:12.5px;
+  font-weight:600;
+  background:#f6ede7;
+  color:#73493d;
+  padding:5px 9px;
+  border-radius:6px;
+  display:inline-block;
+  margin:2px;
+}
+.senior-date-tag{
+  display:block;
+  font-size:12px;
+  color:#726560;
+  margin-top:4px;
+}
+.senior-days-badge{
+  font-size:13.5px;
+  font-weight:700;
+  color:#4e413c;
+  white-space:nowrap;
+}
+.senior-badge{
+  font-size:12px;
+  font-weight:700;
+  padding:6px 12px;
+  border-radius:999px;
+}
+.senior-badge.good{
+  background:#e8f5e9;
+  color:#1b5e20;
+  border:1px solid #c8e6c9;
+}
+.senior-badge.review{
+  background:#fff3e0;
+  color:#e65100;
+  border:1px solid #ffe0b2;
+}
+.senior-next-action strong{
+  font-size:13.5px;
+  font-weight:700;
+  color:#241f1d;
+  display:block;
+}
+.senior-next-action small{
+  font-size:12px;
+  color:#6c605b;
+  display:block;
+  margin-top:3px;
+}
+
+/* BOTONES DE ACCIÓN GIGANTES PARA RETORNO Y DIRECTORIO */
+.senior-return-actions{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  min-width:175px;
+}
+.senior-action-btn{
+  min-height:48px;
+  padding:10px 16px;
+  font-size:13.5px;
+  font-weight:700;
+  border-radius:8px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  white-space:nowrap;
+  cursor:pointer;
+  transition:all 0.15s ease;
+}
+.senior-btn-wa{
+  background:#25D366;
+  color:#fff;
+  border:2px solid #1eb857;
+  box-shadow:0 2px 8px #25d36630;
+}
+.senior-btn-wa:hover{
+  background:#1fa851;
+  border-color:#1a9446;
+  color:#fff;
+}
+.senior-btn-hist{
+  background:#faf6f2;
+  color:#723e38;
+  border:2px solid #dcc6bd;
+}
+.senior-btn-hist:hover{
+  background:#f5eae3;
+  border-color:#ac6660;
+  color:#552824;
+}
+.senior-btn-edit-phone{
+  background:#fff;
+  color:#a0534a;
+  border:2px solid #e5c2b9;
+}
+.senior-btn-edit-phone:hover{
+  background:#fdf5f2;
+  border-color:#a0534a;
+}
+.senior-more-btn{
+  min-height:50px;
+  font-size:14.5px;
+  font-weight:700;
+  padding:12px 24px;
+  border-radius:8px;
+  border:2px solid #ddd1ca;
+  background:#faf7f5;
+  cursor:pointer;
+}
+.senior-more-btn:hover{
+  background:#f3eae4;
+  border-color:#ac6660;
+}
+
+/* DIRECTORIO DE CLIENTAS - ELEMENTOS SENIOR */
+.senior-btn-main{
+  min-height:52px;
+  font-size:15px;
+  font-weight:700;
+  padding:12px 22px;
+  border-radius:10px;
+  box-shadow:0 2px 8px #ac666030;
+}
+.senior-btn-main .icon{
+  width:20px;
+  height:20px;
+}
+.senior-dir-tabs button{
+  min-height:48px;
+  font-size:13.5px;
+  font-weight:600;
+  padding:10px 18px;
+}
+.senior-dir-tabs .active{
+  font-weight:700;
+  color:#8d4945;
+}
+.senior-search-wrap{
+  width:380px;
+  height:54px;
+  border:2px solid #d8ccc4;
+  border-radius:10px;
+  background:#fff;
+}
+.senior-search-wrap .icon{
+  width:20px;
+  height:20px;
+  opacity:0.8;
+}
+.senior-search-wrap input{
+  font-size:15px;
+  min-height:48px;
+  padding:6px 0;
+}
+.senior-toolbar-meta select{
+  min-height:50px;
+  font-size:13.5px;
+  border:2px solid #d8ccc4;
+  border-radius:9px;
+  padding:8px 12px;
+}
+.senior-row-actions{
+  display:flex;
+  gap:8px;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+}
+.senior-table-btn{
+  min-height:44px;
+  padding:8px 14px;
+  font-size:13.5px;
+  font-weight:700;
+  border-radius:8px;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  cursor:pointer;
+  transition:all 0.15s ease;
+}
+.senior-btn-edit{
+  background:#f5f0ec;
+  border:1.5px solid #dcd1ca;
+  color:#3e3632;
+}
+.senior-btn-edit:hover{
+  background:#eae1da;
+  border-color:#ac6660;
+  color:#723e38;
+}
+.senior-btn-delete{
+  background:#fff;
+  border:1.5px solid #ebdcd8;
+  color:#a0534a;
+}
+.senior-btn-delete:hover{
+  background:#faece9;
+  border-color:#a0534a;
+}
+.senior-btn-restore{
+  background:#f4f9f4;
+  border:1.5px solid #cce5cc;
+  color:#2e7d32;
+}
+.senior-history-btn{
+  min-height:44px;
+  padding:8px 14px;
+  font-size:13.5px;
+  font-weight:700;
+  border-radius:8px;
+  border:1.5px solid #dcd1ca;
+  background:#faf7f5;
+  color:#5d3e37;
+  white-space:nowrap;
+}
+.senior-history-btn:hover{
+  background:#f5ece6;
+  border-color:#ac6660;
+}
+.senior-pagination{
+  padding:24px 0;
+}
+.senior-pagination p{
+  font-size:14px;
+  font-weight:600;
+}
+.senior-pagination button{
+  min-height:48px;
+  padding:10px 18px;
+  font-size:14px;
+  font-weight:700;
+  border-radius:8px;
+  border:2px solid #ddd1ca;
+  background:#fff;
+}
+.senior-pagination button:hover{
+  background:#f6ece6;
+  border-color:#ac6660;
+}
+.senior-pagination span{
+  font-size:14px;
+  font-weight:700;
+  padding:10px 16px;
+}
+
+/* MODALES ACCESIBLES PASO A PASO */
+.senior-client-editor{
+  width:520px;
+}
+.senior-editor-hero{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  margin-bottom:20px;
+}
+.senior-editor-hero .editor-avatar{
+  margin-bottom:0;
+  width:60px;
+  height:60px;
+  font-size:20px;
+  flex:none;
+}
+.senior-editor-hero h2{
+  font-size:24px;
+  margin:0 0 4px;
+}
+.senior-editor-hero p{
+  font-size:13px;
+  color:#6c605b;
+  margin:0;
+}
+.senior-modal-step{
+  background:#fdfaf8;
+  border:2px solid #ecdcd3;
+  border-radius:12px;
+  padding:18px 20px;
+  margin-bottom:18px;
+}
+.step-label{
+  display:block;
+  font-size:15px;
+  font-weight:700;
+  color:#3a2e2a;
+  margin-bottom:12px;
+}
+.senior-modal-step label{
+  display:block;
+  font-size:13.5px;
+  font-weight:700;
+  color:#453a35;
+  margin:14px 0 6px;
+}
+.senior-modal-step label:first-of-type{
+  margin-top:6px;
+}
+.senior-input, .senior-textarea{
+  min-height:50px;
+  font-size:15px;
+  border:2px solid #d8ccc4;
+  border-radius:8px;
+  padding:10px 14px;
+  background:#fff;
+}
+.senior-input:focus, .senior-textarea:focus{
+  border-color:#ac6660;
+  outline:3px solid #ac666030;
+}
+.senior-help-text{
+  font-size:12px;
+  color:#70645f;
+  margin-top:6px;
+}
+.senior-modal-footer{
+  padding:20px 24px;
+  gap:12px;
+}
+.senior-btn-modal-cancel{
+  min-height:52px;
+  padding:12px 22px;
+  font-size:15px;
+  font-weight:700;
+  border-radius:9px;
+}
+.senior-btn-modal-save{
+  min-height:52px;
+  padding:12px 28px;
+  font-size:15px;
+  font-weight:700;
+  border-radius:999px;
+  background:#ac6660;
+  color:#fff;
+  border:0;
+  box-shadow:0 3px 10px #ac666038;
+}
+
+/* MODAL DE WHATSAPP SENIOR */
+.senior-message-dialog{
+  max-width:640px;
+  padding:28px 30px;
+}
+.senior-message-dialog h2{
+  font-size:24px;
+  margin:0 0 6px;
+}
+.senior-msg-client{
+  font-size:15px;
+  font-weight:700;
+  color:#8d4945;
+  margin:0 0 16px;
+}
+.senior-msg-context{
+  display:grid;
+  grid-template-columns:1.2fr 1fr 1fr;
+  gap:12px;
+  padding:16px 18px;
+  border-radius:10px;
+  border:2px solid #ecdcd3;
+  background:#faf6f2;
+}
+.senior-msg-context span{
+  font-size:11.5px;
+  font-weight:600;
+  color:#6c605b;
+}
+.senior-msg-context strong{
+  font-size:13.5px;
+  color:#241f1d;
+  margin-top:3px;
+  display:block;
+}
+.senior-composer-label{
+  font-size:14px;
+  font-weight:700;
+  color:#3a2e2a;
+  margin:18px 0 8px;
+  display:block;
+}
+.senior-msg-textarea{
+  font-size:15px;
+  line-height:1.7;
+  border:2px solid #d8ccc4;
+  border-radius:10px;
+  padding:14px;
+}
+.senior-field-help{
+  font-size:13px;
+  color:#635752;
+  margin:10px 0 18px;
+  line-height:1.55;
+}
+.senior-dialog-actions{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:14px;
+  border-top:1px solid #ebdacf;
+  padding-top:18px;
+}
+.senior-btn-cancel{
+  min-height:52px;
+  padding:12px 22px;
+  font-size:14.5px;
+  font-weight:700;
+  border-radius:9px;
+}
+.senior-open-wa{
+  min-height:54px;
+  padding:12px 26px;
+  font-size:16px;
+  font-weight:800;
+  background:#25D366;
+  color:#fff;
+  border:2px solid #1eb857;
+  border-radius:10px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  box-shadow:0 3px 12px #25d36638;
+  cursor:pointer;
+}
+.senior-open-wa:hover{
+  background:#1fa851;
+  border-color:#1a9446;
+}
+
+/* RESPONSIVE SENIOR */
+@media(max-width:1100px){
+  .senior-stats-grid{
+    grid-template-columns:repeat(2, 1fr);
+  }
+  .senior-action-grid{
+    grid-template-columns:repeat(2, 1fr);
+  }
+}
+@media(max-width:700px){
+  .senior-preset-row{
+    grid-template-columns:1fr;
+  }
+  .senior-stats-grid{
+    grid-template-columns:1fr;
+  }
+  .senior-action-grid{
+    grid-template-columns:1fr;
+  }
+  .senior-search-wrap{
+    width:100%;
+  }
+  .senior-client-toolbar{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .senior-toolbar-meta{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .senior-msg-context{
+    grid-template-columns:1fr;
+  }
+  .senior-dialog-actions{
+    flex-direction:column-reverse;
+  }
+  .senior-open-wa{
+    width:100%;
+  }
+}
+

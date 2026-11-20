@@ -132,34 +132,55 @@ function renderDirectory(){
   $('clients-empty').hidden=rows.length!==0;$('client-rows').replaceChildren();
   rows.slice(start,start+pageSize).forEach((client,i)=>{
     const tr=document.createElement('tr');
-    const name=node('div',undefined,'client');name.append(node('span',initials(client.name),'avatar tone-'+i%5));
-    const copy=node('div');const nameButton=node('button',displayName(client.name),'client-name-button');nameButton.type='button';nameButton.addEventListener('click',()=>client.archivedAt?restoreClient(client,nameButton):openEditor(client));
-    copy.append(nameButton,node('small',client.dni?'DNI ····'+client.dni.slice(-4):'DNI por completar'));
+    tr.className='senior-data-row';
+    const name=node('div',undefined,'client senior-client-cell');
+    name.append(node('span',initials(client.name),'avatar tone-'+i%5+' senior-avatar'));
+    const copy=node('div');
+    const nameButton=node('button',displayName(client.name),'client-name-button senior-client-name');
+    nameButton.type='button';
+    nameButton.addEventListener('click',()=>client.archivedAt?restoreClient(client,nameButton):openEditor(client));
+    copy.append(nameButton,node('small',client.dni?'DNI ····'+client.dni.slice(-4):'DNI por completar','senior-dni-pill'));
     if(client.interests?.length){
-      const intRow=node('div',undefined,'client-row-interests');
+      const intRow=node('div',undefined,'client-row-interests senior-interests-row');
       for(const it of client.interests.slice(0,2)){
         intRow.append(node('span',it.label,'row-interest-pill'+(it.primary?' primary-int':'')));
       }
       copy.append(intRow);
     }
     name.append(copy);
-    const actions=node('div',undefined,'row-actions');
-    if(client.archivedAt){const restore=node('button','Restaurar');restore.type='button';restore.prepend(icon('restore'));restore.addEventListener('click',()=>restoreClient(client,restore));actions.append(restore);}
-    else {
-      const edit=node('button');edit.type='button';edit.title='Editar clienta';edit.setAttribute('aria-label','Editar a '+displayName(client.name));edit.append(icon('edit'));edit.addEventListener('click',()=>openEditor(client));
+    const actions=node('div',undefined,'row-actions senior-row-actions');
+    if(client.archivedAt){
+      const restore=node('button','Restaurar','senior-table-btn senior-btn-restore');
+      restore.type='button';
+      restore.prepend(icon('restore'));
+      restore.addEventListener('click',()=>restoreClient(client,restore));
+      actions.append(restore);
+    } else {
+      const edit=node('button',undefined,'senior-table-btn senior-btn-edit');
+      edit.type='button';
+      edit.title='Editar clienta';
+      edit.setAttribute('aria-label','Editar a '+displayName(client.name));
+      edit.append(icon('edit'),node('span','Editar'));
+      edit.addEventListener('click',()=>openEditor(client));
       actions.append(edit);
       if(store.isAdmin()){
-        const remove=node('button',undefined,'delete-action');remove.type='button';remove.title='Eliminar clienta';remove.setAttribute('aria-label','Eliminar a '+displayName(client.name));remove.append(icon('trash'));remove.addEventListener('click',()=>askDelete(client));actions.append(remove);
+        const remove=node('button',undefined,'delete-action senior-table-btn senior-btn-delete');
+        remove.type='button';
+        remove.title='Eliminar clienta';
+        remove.setAttribute('aria-label','Eliminar a '+displayName(client.name));
+        remove.append(icon('trash'));
+        remove.addEventListener('click',()=>askDelete(client));
+        actions.append(remove);
       }
     }
-    const phone=node('div',client.phone||'Sin teléfono',!whatsappPhone(client.phone)?'missing-phone':'');
-    if(!whatsappPhone(client.phone))phone.append(node('small',contactProblem(client.phone),'field-help'));
-    const histBtn=node('button',undefined,'history-sheet-btn');
+    const phone=node('div',client.phone||'Sin teléfono',!whatsappPhone(client.phone)?'missing-phone senior-phone-missing':'senior-phone-cell');
+    if(!whatsappPhone(client.phone))phone.append(node('small',contactProblem(client.phone),'field-help senior-phone-help'));
+    const histBtn=node('button',undefined,'history-sheet-btn senior-history-btn');
     histBtn.type='button';
     histBtn.title='Ver historial de servicios e intereses de '+displayName(client.name);
-    histBtn.append(icon('file'),node('span','Historial'),node('strong',String(client.visits||0),'history-count-pill'));
+    histBtn.append(icon('file'),node('span','Ver Historial'),node('strong',String(client.visits||0),'history-count-pill'));
     histBtn.addEventListener('click',()=>openClientHistory(client));
-    const values=[name,phone,node('span',birthdayLabel(client.birthday),'date-cell'),node('span',dateLabel(client.lastVisit),'date-cell'),histBtn,actions];
+    const values=[name,phone,node('span',birthdayLabel(client.birthday),'date-cell senior-date-cell'),node('span',dateLabel(client.lastVisit),'date-cell senior-date-cell'),histBtn,actions];
     for(const value of values){const cell=document.createElement('td');if(value instanceof Node)cell.append(value);else cell.textContent=value;tr.append(cell);}
     $('client-rows').append(tr);
   });
