@@ -5,6 +5,13 @@ const button=document.getElementById('login-submit');
 const error=document.getElementById('login-error');
 const emailInput=document.getElementById('login-email');
 const passwordInput=document.getElementById('login-password');
+const togglePass=document.getElementById('toggle-pass');
+
+togglePass?.addEventListener('click',()=>{
+  const show=passwordInput.type==='password';
+  passwordInput.type=show?'text':'password';
+  togglePass.textContent=show?'Ocultar':'Mostrar';
+});
 
 form.addEventListener('submit',async event=>{
   event.preventDefault();

@@ -51,17 +51,17 @@ function renderAccounts(){
         : node('span','Desactivada','badge');
 
     const actions=node('div',undefined,'acct-actions');
-    const passBtn=node('button',acct.hasPassword?'Cambiar clave':'Asignar contraseña',acct.hasPassword?'tiny-btn':'primary tiny-btn');
+    const passBtn=node('button',acct.hasPassword?'🔑 Cambiar clave':'🔑 Asignar contraseña',acct.hasPassword?'senior-table-btn senior-btn-edit':'primary senior-table-btn');
     passBtn.type='button';
     passBtn.addEventListener('click',()=>openPasswordModal(acct));
     actions.append(passBtn);
 
-    const editBtn=node('button','Editar','tiny-btn');editBtn.type='button';
+    const editBtn=node('button','✏️ Editar','senior-table-btn senior-btn-edit');editBtn.type='button';
     editBtn.addEventListener('click',()=>openAccountModal(acct));
     actions.append(editBtn);
 
     if(acct.role==='collaborator'){
-      const toggleBtn=node('button',acct.active?'Desactivar':'Activar','tiny-btn');
+      const toggleBtn=node('button',acct.active?'Desactivar':'Activar','senior-table-btn '+(acct.active?'danger-outline':'senior-btn-restore'));
       toggleBtn.type='button';
       if(!acct.hasPassword){toggleBtn.disabled=true;toggleBtn.title='Asigna primero una contraseña para activar la cuenta.';}
       toggleBtn.addEventListener('click',()=>toggleActive(acct,toggleBtn));

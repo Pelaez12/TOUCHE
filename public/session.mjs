@@ -24,7 +24,7 @@ function syncRoleUI(user){
     el.hidden=isStylist;
   }
   const agendaNav=$('nav-agenda-label');
-  if(agendaNav)agendaNav.textContent=isStylist?'Mi agenda':'Agenda del día';
+  if(agendaNav)agendaNav.textContent=isStylist?'Mi agenda':'Agenda';
   const ini=initials(user.displayName);
   if($('user-avatar'))$('user-avatar').textContent=ini;
   if($('top-avatar')){$('top-avatar').textContent=ini;$('top-avatar').setAttribute('aria-label',`${user.displayName} (${isAdmin?'Administrador':scope==='reception'?'Recepción':'Estilista'})`);}

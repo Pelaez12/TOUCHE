@@ -339,9 +339,14 @@ table,.stats strong,.history-count-pill,.history-stat-mini strong,.date-cell{fon
   flex:none;
   line-height:1;
 }
-.senior-guide-banner strong{
+.senior-guide-banner > div > strong{
   display:block;
   font-size:15px;
+  font-weight:700;
+  color:#6c3d38;
+}
+.senior-guide-banner p strong{
+  display:inline;
   font-weight:700;
   color:#6c3d38;
 }
@@ -1220,4 +1225,1089 @@ table,.stats strong,.history-count-pill,.history-stat-mini strong,.date-cell{fon
     width:100%;
   }
 }
+
+/* ==========================================================================
+   SISTEMA VISUAL PANEL / CANVAS ESTILO CANVA (EQUIPO, COLABORADORAS Y ADMIN)
+   Lienzo cálido suave + tarjetas blancas flotantes + navegación grande +
+   portal dinámico paso a paso para estilistas, recepción y administración.
+   ========================================================================== */
+html,body{
+  background:#f5f0eb;
+  color:#241f1d;
+  font-size:15px;
+}
+
+.sidebar{
+  background:#ffffff;
+  border-right:1.5px solid #e6d8cc;
+  box-shadow:2px 0 18px rgba(44,40,38,.03);
+}
+.workspace-switch{
+  border-radius:14px;
+  border:1.5px solid #e7d9ce;
+  background:#fbf7f3;
+  padding:13px 12px;
+}
+.workspace-switch strong{font-size:13px;color:#241f1d}
+.workspace-switch small{font-size:11px;color:#665c56}
+.nav-label{font-size:11px;letter-spacing:1.2px;color:#7a6f69;margin:24px 12px 10px}
+nav a{
+  min-height:50px;
+  padding:12px 14px;
+  border-radius:12px;
+  font-size:14px;
+  font-weight:600;
+  color:#453c38;
+  gap:12px;
+}
+nav a .icon{width:21px;height:21px}
+nav a:hover{background:#f7f1ec;color:#241f1d}
+nav a[aria-current=page]{
+  background:#f6e4e1;
+  color:#843f39;
+  font-weight:700;
+  box-shadow:inset 3px 0 0 #96504a;
+}
+.nav-count{
+  font-size:11.5px;
+  font-weight:700;
+  padding:4px 9px;
+  border-radius:999px;
+  background:#fff;
+  border:1px solid #e5d5ca;
+  color:#7e403b;
+}
+.sidebar-user-actions button,.sidebar-pwa-actions button{
+  min-height:44px;
+  font-size:12.5px;
+  font-weight:700;
+  border-radius:10px;
+}
+.profile strong{font-size:13px;color:#241f1d}
+.profile small{font-size:11px;color:#665c56}
+
+.topbar{
+  background:rgba(255,255,255,.97);
+  backdrop-filter:blur(8px);
+  border-bottom:1.5px solid #e6d8cc;
+  height:78px;
+}
+.breadcrumb{font-size:13.5px;color:#665c56}
+.breadcrumb strong{font-size:14.5px;font-weight:700;color:#241f1d}
+.global-search{
+  height:46px;
+  border:1.5px solid #dccdc3;
+  border-radius:12px;
+  background:#fbf8f5;
+  padding:0 14px;
+}
+.global-search input{font-size:14px;min-height:42px}
+.salon-notifs-btn{
+  min-height:44px;
+  padding:8px 15px;
+  font-size:13px;
+  border-width:1.5px;
+}
+.salon-notifs-btn strong{min-width:24px;height:24px;font-size:12px}
+.admin-alerts-btn{
+  min-height:44px;
+  padding:8px 15px;
+  border-radius:999px;
+  font-size:13px;
+  font-weight:700;
+  background:#fcf0ef;
+  border:1.5px solid #dfaba6;
+  color:#8c2620;
+}
+.connection-status{font-size:12px;font-weight:600}
+
+.content{padding:30px 36px 40px}
+.heading{margin-bottom:22px}
+.heading h1{font-size:28px;font-weight:700;color:#201c1a;margin-bottom:6px}
+.heading p{font-size:14.5px;color:#574f49;line-height:1.55}
+
+/* Tarjetas flotantes estilo panel Canva */
+.canvas-card{
+  background:#ffffff;
+  border:1.5px solid #e4d6ca;
+  border-radius:18px;
+  box-shadow:0 3px 10px rgba(44,40,38,.03),0 12px 28px rgba(62,46,36,.05);
+}
+
+.senior-head-btn{
+  min-height:48px;
+  padding:10px 18px;
+  font-size:14px;
+  font-weight:700;
+  border-radius:12px;
+  border:1.5px solid #d8c8be;
+  background:#fff;
+}
+.senior-head-btn:hover{border-color:#96504a;background:#fbf5f0;color:#843f39}
+
+/* Barra rápida de cambio de día en Agenda (para adultos mayores) */
+.agenda-quick-days-bar{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+  padding:10px;
+  margin-bottom:20px;
+}
+.quick-day-btn{
+  min-height:50px;
+  padding:10px 14px;
+  border-radius:13px;
+  border:1.5px solid #e2d4ca;
+  background:#fbf7f3;
+  color:#3b322e;
+  font-size:14.5px;
+  font-weight:700;
+  transition:all .15s ease;
+}
+.quick-day-btn:hover{background:#f3e8e0;border-color:#96504a;color:#843f39}
+.quick-day-btn.is-active{
+  background:#96504a;
+  border-color:#96504a;
+  color:#ffffff;
+  box-shadow:0 3px 10px rgba(150,80,74,.25);
+}
+
+/* Calendario lateral más amplio y fácil de tocar */
+.agenda-layout{grid-template-columns:310px minmax(0,1fr);gap:22px}
+.agenda-calendar-panel{padding:22px;border-radius:18px}
+.calendar-heading h2{font-size:17px;font-weight:700;color:#241f1d}
+.calendar-heading button{min-width:44px;min-height:44px;border-radius:12px;border:1.5px solid #ded0c6;font-size:22px;color:#843f39}
+.agenda-calendar>.weekday{font-size:12.5px;font-weight:700;color:#6c605a}
+.agenda-calendar button{min-height:42px;font-size:14px;font-weight:600;border-radius:999px}
+.agenda-calendar button.selected{background:#96504a;color:#fff;font-weight:700}
+.agenda-calendar button.today{outline:2px solid #96504a;outline-offset:-2px;font-weight:700}
+.agenda-date-controls label{font-size:13px;font-weight:700;color:#3f3632}
+.agenda-date-controls input{min-height:46px;font-size:14.5px;border:1.5px solid #d8c8be;border-radius:10px}
+.agenda-date-controls button{min-height:46px;padding:0 16px;font-size:14px;font-weight:700;border-radius:10px;border:1.5px solid #96504a;color:#843f39;background:#fbf5f0}
+
+/* Encabezado del día */
+.agenda-day-heading{
+  padding:18px 22px;
+  margin-bottom:16px;
+}
+.agenda-day-heading h2{font-size:22px;font-weight:700;color:#201c1a;margin-bottom:4px;text-transform:capitalize}
+.agenda-day-heading p{font-size:14px;color:#574f49;margin:0;font-weight:500}
+.senior-refresh-btn{min-height:46px;padding:10px 16px;font-size:13.5px;font-weight:700;border-radius:11px;border:1.5px solid #d8c8be}
+.agenda-view-switch{padding:4px;border-radius:12px}
+.agenda-view-switch button{min-height:40px;padding:6px 14px;font-size:13.5px;border-radius:9px}
+
+/* Panel Dinámico de Bienvenida y KPIs para Colaboradoras */
+.agenda-my-banner{
+  padding:22px 24px;
+  margin:0 0 18px;
+  border:2px solid #e5cfc5;
+  background:linear-gradient(135deg,#fff,#fdf6f0);
+}
+.my-role-pill{
+  display:inline-block;
+  font-size:11.5px;
+  font-weight:800;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  color:#843f39;
+  background:#f6e4e1;
+  padding:5px 12px;
+  border-radius:999px;
+  margin-bottom:8px;
+}
+.my-banner-intro strong{font-size:21px;font-weight:700;color:#201c1a;display:block;line-height:1.3}
+.my-banner-intro p{font-size:14.5px;color:#4f4642;margin:6px 0 0;line-height:1.5}
+.my-banner-actions{gap:10px;align-items:center}
+.senior-arrival-btn{
+  min-height:54px;
+  padding:12px 22px;
+  font-size:15.5px;
+  font-weight:800;
+  border-radius:14px;
+  background:#1e6b43;
+  border-color:#1e6b43;
+  color:#fff;
+  box-shadow:0 4px 14px rgba(30,107,67,.28);
+}
+.senior-arrival-btn:hover{background:#175534;border-color:#175534}
+.arrival-confirmed-pill{
+  display:inline-flex;
+  align-items:center;
+  min-height:50px;
+  padding:10px 18px;
+  border-radius:13px;
+  background:#eaf5ee;
+  border:2px solid #9ec8ae;
+  color:#1e5633;
+  font-size:14.5px;
+  font-weight:800;
+}
+.senior-banner-link{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:50px;
+  padding:10px 18px;
+  border-radius:13px;
+  border:1.5px solid #d5c4b8;
+  background:#fff;
+  color:#3e3531;
+  font-size:14px;
+  font-weight:700;
+}
+.senior-banner-link:hover{border-color:#96504a;background:#fbf5f0;color:#843f39}
+
+.collab-kpi-row{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+  margin:18px 0 14px;
+}
+.collab-kpi-tile{
+  background:#ffffff;
+  border:1.5px solid #e6d7cc;
+  border-radius:14px;
+  padding:14px 16px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.collab-kpi-tile.kpi-green{background:#f2faf5;border-color:#b8dbca}
+.collab-kpi-tile.kpi-amber{background:#fff9f0;border-color:#ebd0a7}
+.collab-kpi-lbl{font-size:13px;font-weight:700;color:#574f49}
+.collab-kpi-val{font-size:30px;font-weight:800;color:#201c1a;line-height:1.1;font-variant-numeric:tabular-nums}
+.collab-kpi-tile.kpi-green .collab-kpi-val{color:#1e5633}
+.collab-kpi-tile.kpi-amber .collab-kpi-val{color:#9a5800}
+.my-banner-services{font-size:13.5px;color:#5d463e;padding-top:12px}
+
+/* Orden de llegada y equipo */
+.team-capacity-summary{padding:15px 18px;border-radius:14px;font-size:13.5px;border-width:1.5px;background:#fff}
+.team-capacity-summary strong{font-size:15px}
+.agenda-shifts-bar{padding:18px 20px;margin-bottom:16px}
+.shifts-head strong{font-size:14.5px;color:#201c1a}
+.shifts-head small{font-size:13px;color:#5d534e}
+.shift-chip{padding:8px 14px;min-height:46px;font-size:13.5px;font-weight:600;border-width:1.5px}
+.shift-chip-actions button{min-height:36px;padding:6px 12px;font-size:12.5px;font-weight:700;border-radius:8px}
+
+/* Filtros grandes en Agenda */
+.senior-agenda-filters{padding:0 0 16px;gap:8px}
+.senior-agenda-filters button{
+  min-height:46px;
+  padding:10px 16px;
+  font-size:13.5px;
+  font-weight:700;
+  border-radius:12px;
+  border:1.5px solid #dfd2c8;
+  background:#ffffff;
+  color:#4c433f;
+}
+.senior-agenda-filters button:hover{border-color:#96504a;background:#fbf5f0}
+.senior-agenda-filters button.selected{
+  background:#96504a;
+  border-color:#96504a;
+  color:#ffffff;
+}
+
+/* Columnas y Tarjetas de Citas Dinámicas y Grandes */
+.agenda-board{grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:18px}
+.staff-column{
+  background:#ffffff;
+  border:1.5px solid #e4d6ca;
+  border-radius:18px;
+  padding:18px;
+  gap:14px;
+  box-shadow:0 3px 10px rgba(44,40,38,.03);
+}
+.staff-column.my-column{border:2px solid #c9938c;box-shadow:0 4px 18px rgba(150,80,74,.1)}
+.staff-column-head{padding-bottom:12px;border-bottom:1.5px solid #efe5de}
+.staff-column-head h3{font-size:17px;font-weight:700;color:#201c1a}
+.staff-column-head small{font-size:13px;color:#625752;margin-top:4px}
+.column-empty{font-size:14px;padding:16px 8px;color:#6e635d}
+
+.appt-card{
+  background:#fdfbf9;
+  border:1.5px solid #e4d4c9;
+  border-left:5px solid #96504a;
+  border-radius:14px;
+  padding:16px;
+  gap:12px;
+  box-shadow:0 2px 6px rgba(44,40,38,.03);
+}
+.appt-card.completed{border-left-color:#1e6b43;background:#f4faf6;border-color:#c2decb}
+.appt-card.cancelled,.appt-card.no_show{border-left-color:#a59c97;background:#f7f5f3}
+.appt-card-top{font-size:14.5px;color:#3a312d}
+.appt-card-top strong{font-size:15.5px;font-weight:800;font-variant-numeric:tabular-nums}
+.appointment-badge{font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px}
+.appt-card-body h4{font-size:18px;font-weight:700;color:#1e1a18;margin:2px 0 4px}
+.appt-service{font-size:15px;font-weight:600;color:#7a3e39}
+.appt-tags{gap:6px;margin-top:8px}
+.mini-tag{font-size:12px;font-weight:700;padding:5px 10px;border-radius:8px}
+.mini-tag.arrival-arrived{background:#eaf5ee;color:#1e5633;border:1px solid #9ec8ae}
+.appointment-note{font-size:13.5px;background:#ffffff;border:1px solid #ece0d8;border-radius:10px;padding:10px 12px;margin-top:8px;color:#413834}
+
+.senior-appt-actions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  padding-top:10px;
+  border-top:1.5px solid #efe5de;
+}
+.senior-appt-btn{
+  min-height:46px;
+  padding:9px 12px;
+  font-size:13.5px;
+  font-weight:700;
+  border-radius:11px;
+  border:1.5px solid #dcd0c7;
+  background:#ffffff;
+  color:#2d2623;
+  white-space:normal;
+  text-align:center;
+  line-height:1.25;
+}
+.senior-appt-btn:hover:not(:disabled){border-color:#96504a;background:#fbf5f0}
+.arrival-arrived-btn{
+  background:#eaf5ee;
+  border-color:#8ec2a2;
+  color:#1c5331;
+}
+.arrival-arrived-btn:hover:not(:disabled),.arrival-arrived-btn.is-active{
+  background:#1e6b43;
+  border-color:#1e6b43;
+  color:#ffffff;
+}
+.arrival-missed-btn{
+  background:#fff6eb;
+  border-color:#e2b67c;
+  color:#7a4500;
+}
+.arrival-missed-btn:hover:not(:disabled){
+  background:#fde8ce;
+  border-color:#c98a3b;
+}
+
+.agenda-empty{padding:44px 24px;margin:12px 0 20px;border-style:dashed;border-width:2px}
+.agenda-empty h3{font-size:20px;font-weight:700;color:#241f1d}
+.agenda-empty p{font-size:14.5px;color:#574f49}
+.agenda-notes{padding:20px 22px;margin-top:20px}
+.agenda-notes>label{font-size:17px;font-weight:700;color:#241f1d}
+.agenda-notes>p{font-size:13.5px}
+.agenda-notes textarea{font-size:15px;border:1.5px solid #d8c8be;border-radius:12px;padding:12px 14px}
+.agenda-notes button{min-height:48px;padding:10px 20px;font-size:14px;font-weight:700;border-radius:11px}
+
+/* Modal Agendar Clienta paso a paso grande */
+.appt-step{
+  background:#fdfaf7;
+  border:1.5px solid #ebdcd3;
+  border-radius:14px;
+  padding:14px 16px;
+  margin:0 0 14px;
+}
+.step-pill{width:26px;height:26px;font-size:13px;background:#96504a;color:#fff;margin-right:8px}
+.appt-step label{font-size:14px;font-weight:700;color:#2c2420}
+.appt-step input,.appt-step select,.appt-step textarea{min-height:50px;font-size:15px;border:1.5px solid #d8c8be;border-radius:10px}
+.duration-presets button{min-height:44px;padding:8px 14px;font-size:13.5px;font-weight:700;border-radius:10px}
+
+/* Sección Colaboradoras (#equipo) estilo Panel Canva */
+.team-page-grid{grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px}
+.team-member-card{
+  border:1.5px solid #e4d6ca;
+  border-radius:18px;
+  padding:22px;
+  gap:14px;
+  box-shadow:0 3px 10px rgba(44,40,38,.03);
+}
+.team-card-head .avatar{width:52px;height:52px;font-size:16px;font-weight:700}
+.team-card-head strong{font-size:16.5px;font-weight:700;color:#201c1a}
+.team-card-head small{font-size:13px;color:#5e544f}
+.team-card-summary{font-size:13.5px;color:#4f4642}
+.team-card-actions{gap:10px;padding-top:10px;border-top:1px solid #f0e6df}
+.senior-team-btn{min-height:46px;padding:10px 16px;font-size:13.5px;font-weight:700;border-radius:11px;flex:1}
+.team-durations-card{padding:20px 22px}
+.service-dur-row{font-size:13.5px;padding:10px 0;gap:10px;grid-template-columns:1fr 78px 78px auto}
+.service-dur-row input{min-height:42px;font-size:14px;text-align:center}
+.service-dur-row button{min-height:42px;padding:8px 14px;font-size:13px;font-weight:700}
+
+/* Sección Mi Perfil (#perfil) estilo Panel Canva Paso a Paso */
+main{min-width:0;overflow-x:clip}
+.page{min-width:0;max-width:100%}
+.senior-dir-tabs{overflow-x:visible;overflow-y:hidden;flex-wrap:wrap;gap:18px;white-space:normal}
+#accounts-page .senior-table-wrap table{min-width:0;width:100%}
+#accounts-page .acct-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.profile-layout{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:22px;align-items:start}
+.profile-main-col{display:flex;flex-direction:column;gap:20px;min-width:0;max-width:100%}
+.profile-card{padding:24px;border-radius:18px;min-width:0;max-width:100%;overflow:hidden}
+.profile-card label{display:block;font-size:14px;font-weight:700;color:#2c2420;margin:14px 0 6px}
+.profile-subhead{display:block;font-size:13.5px;font-weight:700;color:#574f49;margin-bottom:8px}
+.profile-active-wrap{background:#fbf7f3;border:1.5px solid #ebdcd3;border-radius:14px;padding:14px 16px;margin-bottom:16px}
+.profile-tag-chip{padding:7px 12px;font-size:13px;font-weight:700;min-height:36px}
+.profile-tag-chip .chip-rm{font-size:18px;padding:0 4px;min-height:24px}
+.profile-cat-menubar{display:flex;flex-wrap:wrap;gap:8px;padding:6px 0 14px;overflow-x:visible;max-width:100%}
+.cat-menu-btn{min-height:46px;padding:9px 14px;font-size:13px;font-weight:700;border-width:1.5px;flex:0 1 auto;white-space:normal;text-align:left}
+.cat-menu-badge{font-size:11px;padding:3px 8px}
+.profile-cat-head strong{font-size:16px;color:#201c1a}
+.profile-cat-head select{display:none}
+.senior-level-pills{margin:12px 0 10px;gap:8px}
+.senior-level-pills button{min-height:46px;padding:9px 14px;font-size:13.5px;font-weight:700;border-radius:11px;border-width:1.5px}
+.profile-service-chips{gap:10px;margin-top:14px}
+.service-tag-btn{
+  min-height:48px;
+  padding:10px 16px;
+  font-size:14px;
+  font-weight:600;
+  border-radius:12px;
+  border-width:1.5px;
+}
+.full-width-btn{width:100%;margin-top:14px}
+
+/* Alertas Admin y Notificaciones */
+.admin-alerts-panel{margin-bottom:18px;padding:18px 20px;border-radius:16px;border:2px solid #dfaba6;background:#fcf2f0}
+.admin-alerts-head strong{font-size:16px;color:#8c2620}
+.admin-alert-card{background:#fff;border:1.5px solid #ebcbc7;border-radius:12px;padding:14px 16px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.admin-alert-info strong{font-size:15px;color:#241f1d;display:block}
+.admin-alert-info p{font-size:14px;margin:4px 0;color:#4f4642}
+.admin-alert-actions{display:flex;gap:8px;flex-wrap:wrap}
+.admin-alert-actions button{min-height:44px;padding:8px 14px;font-size:13.5px;font-weight:700}
+
+/* Historial 2025-2026 (#revision) */
+.history-overview article{border-radius:16px;padding:22px}
+.history-overview article>span{font-size:13.5px;font-weight:600}
+.history-overview strong{font-size:34px;font-weight:800}
+.history-register{border-radius:18px}
+.quality{border-radius:16px;padding:22px 24px}
+.quality summary{font-size:16px;font-weight:700}
+
+/* Barra móvil inferior más cómoda + Responsive Canva sin desbordamiento */
+.mobile-bottom-nav{
+  display:none;
+}
+@media(max-width:1050px){
+  .agenda-layout{grid-template-columns:minmax(0,1fr);gap:18px}
+  .agenda-calendar-panel,.agenda-day-panel{max-width:100%;min-width:0}
+  .profile-layout{grid-template-columns:minmax(0,1fr);gap:18px}
+}
+@media(max-width:700px){
+  html,body{overflow-x:clip}
+  .content{padding:18px 14px 96px;max-width:100%;overflow-x:clip}
+  .heading{flex-direction:column;align-items:flex-start;gap:12px}
+  .heading h1{font-size:24px}
+  .agenda-quick-days-bar{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:8px}
+  .quick-day-btn{min-height:48px;padding:8px 10px;font-size:13.5px}
+  .agenda-layout{grid-template-columns:minmax(0,1fr)!important;gap:16px}
+  .agenda-day-heading{flex-direction:column;align-items:flex-start;padding:16px}
+  .agenda-my-banner{padding:18px 16px}
+  .my-banner-actions{width:100%}
+  .senior-arrival-btn,.senior-banner-link{width:100%}
+  .collab-kpi-row{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .collab-kpi-tile{padding:10px 10px}
+  .collab-kpi-val{font-size:24px}
+  .collab-kpi-lbl{font-size:11.5px}
+  .agenda-board{grid-template-columns:minmax(0,1fr)}
+  .senior-appt-actions{grid-template-columns:1fr}
+  .team-page-grid{grid-template-columns:minmax(0,1fr)}
+  .profile-layout{grid-template-columns:minmax(0,1fr)!important}
+  .profile-card{padding:18px 16px}
+  #accounts-page .senior-table-wrap table{min-width:680px}
+  .mobile-bottom-nav{
+    display:flex;
+    position:fixed;
+    inset:auto 0 0 0;
+    z-index:50;
+    background:#ffffff;
+    border-top:1.5px solid #e4d6ca;
+    padding:6px 8px max(8px,env(safe-area-inset-bottom));
+    justify-content:space-around;
+    box-shadow:0 -4px 18px rgba(44,40,38,.08);
+  }
+  .mobile-bottom-nav a{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:4px;
+    min-height:54px;
+    margin:0;
+    padding:6px 4px;
+    border-radius:12px;
+    font-size:12px;
+    font-weight:700;
+    color:#5d534e;
+  }
+  .mobile-bottom-nav a .icon{width:22px;height:22px}
+  .mobile-bottom-nav a[aria-current=page]{background:#f6e4e1;color:#843f39;box-shadow:none}
+}
+
+/* ==========================================================================
+   CANVA STUDIO WORKSPACE SHELL (PANEL TIPO CANVA PARA ADMINISTRACIÓN Y EQUIPO)
+   - Barra superior degradada a ancho completo con logo blanco + accesos + CTA blanco
+   - Barra lateral delgada de tarjetas-ícono flotantes + botón circular brillante abajo
+   - Lienzo central blanco/suave ultra amplio y despejado
+   - Dock flotante inferior derecho con deslizador de tamaño/zoom + modo pantalla amplia
+   ========================================================================== */
+:root{
+  --canva-bar-h:64px;
+  --canva-rail-w:96px;
+}
+
+html,body{
+  background:#faf8f6;
+}
+
+/* 1. Barra superior degradada a ancho completo estilo Canva */
+.topbar.canva-topbar{
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  z-index:45;
+  height:var(--canva-bar-h);
+  padding:0 18px 0 16px;
+  border-bottom:0;
+  background:linear-gradient(90deg,#8b433d 0%,#ac6660 44%,#c28174 78%,#9a566b 100%);
+  box-shadow:0 3px 16px rgba(48,26,22,.16);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  color:#ffffff;
+}
+
+.canva-top-left{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:0;
+}
+.canva-brand{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:4px 8px;
+  border-radius:10px;
+  transition:background .15s ease;
+}
+.canva-brand:hover{background:rgba(255,255,255,.14)}
+.canva-brand img{
+  height:34px;
+  width:auto;
+  object-fit:contain;
+  filter:brightness(0) invert(1);
+}
+.canva-brand-tag{
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.9);
+  padding:3px 8px;
+  border-radius:999px;
+  background:rgba(255,255,255,.16);
+  border:1px solid rgba(255,255,255,.22);
+}
+
+.canva-topbar .breadcrumb{
+  color:rgba(255,255,255,.8);
+  font-size:13.5px;
+  gap:10px;
+}
+.canva-topbar .breadcrumb-divider{color:rgba(255,255,255,.45)}
+.canva-topbar .breadcrumb strong{
+  color:#ffffff;
+  font-size:14.5px;
+  font-weight:700;
+}
+
+.canva-menu-toggle{
+  color:#ffffff;
+  background:rgba(255,255,255,.16);
+  border:1px solid rgba(255,255,255,.26);
+  border-radius:10px;
+  min-width:40px;
+  min-height:40px;
+  padding:6px;
+}
+.canva-menu-toggle .icon{filter:brightness(0) invert(1);opacity:1}
+
+.canva-top-right{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+}
+
+.canva-top-search{
+  width:240px;
+  height:40px;
+  border-radius:11px;
+  background:rgba(255,255,255,.18);
+  border:1px solid rgba(255,255,255,.28);
+  padding:0 12px;
+  transition:background .15s ease,border-color .15s ease,width .18s ease;
+}
+.canva-top-search:focus-within{
+  background:#ffffff;
+  border-color:#ffffff;
+  width:280px;
+}
+.canva-top-search .icon{filter:brightness(0) invert(1);opacity:.9}
+.canva-top-search:focus-within .icon{filter:none;opacity:.65}
+.canva-top-search input{
+  color:#ffffff;
+  min-height:36px;
+  font-size:13.5px;
+}
+.canva-top-search input::placeholder{color:rgba(255,255,255,.86)}
+.canva-top-search:focus-within input{color:#241f1d}
+.canva-top-search:focus-within input::placeholder{color:#7a6f69}
+.canva-top-search .key-hint{
+  background:rgba(255,255,255,.18);
+  border-color:rgba(255,255,255,.32);
+  color:#ffffff;
+}
+.canva-top-search:focus-within .key-hint{
+  background:#f5f0eb;
+  border-color:#dfd3ca;
+  color:#6c605a;
+}
+.canva-top-search .suggestions{color:#241f1d}
+
+.canva-avatar-btn{
+  width:38px;
+  height:38px;
+  min-height:38px;
+  padding:0;
+  border-radius:999px;
+  background:#ffffff;
+  color:#843f39;
+  border:2px solid rgba(255,255,255,.85);
+  font-size:13px;
+  font-weight:800;
+  box-shadow:0 2px 8px rgba(0,0,0,.16);
+}
+.canva-avatar-btn:hover{background:#fdf3ee;transform:scale(1.04)}
+
+.canva-top-circle{
+  width:38px;
+  height:38px;
+  min-height:38px;
+  padding:0;
+  border-radius:999px;
+  background:rgba(255,255,255,.18);
+  border:1px solid rgba(255,255,255,.32);
+  color:#ffffff;
+}
+.canva-top-circle .icon{filter:brightness(0) invert(1);opacity:1;width:18px;height:18px}
+.canva-top-circle:hover{background:rgba(255,255,255,.28)}
+
+.canva-top-pill{
+  min-height:38px;
+  padding:6px 12px;
+  border-radius:10px;
+  background:rgba(255,255,255,.16);
+  border:1px solid rgba(255,255,255,.28);
+  color:#ffffff;
+  font-size:13px;
+  font-weight:700;
+}
+.canva-top-pill .icon{filter:brightness(0) invert(1);opacity:1}
+.canva-top-pill:hover{background:rgba(255,255,255,.26);border-color:rgba(255,255,255,.45)}
+.canva-top-pill strong{
+  background:#ffffff;
+  color:#843f39;
+  min-width:22px;
+  height:22px;
+  font-size:11.5px;
+}
+.admin-alerts-btn.canva-top-pill{
+  background:#fff3f1;
+  border-color:#ffffff;
+  color:#9d251e;
+}
+.admin-alerts-btn.canva-top-pill:hover{background:#ffffff}
+
+.canva-status-pill{
+  color:rgba(255,255,255,.92);
+  font-size:11.5px;
+  padding:4px 8px;
+  border-radius:999px;
+  background:rgba(255,255,255,.14);
+}
+.canva-status-pill.connected i{background:#7ef2a6;width:7px;height:7px}
+.canva-status-pill.offline{background:#fff0ee;color:#9d251e}
+
+/* Botón blanco característico estilo "Share" de Canva a la derecha */
+.canva-share-btn{
+  min-height:40px;
+  padding:8px 16px;
+  border-radius:11px;
+  background:#ffffff;
+  border:0;
+  color:#241f1d;
+  font-size:13.5px;
+  font-weight:800;
+  box-shadow:0 2px 10px rgba(0,0,0,.14);
+  white-space:nowrap;
+}
+.canva-share-btn:hover{background:#fdf6f1;color:#843f39;transform:translateY(-1px)}
+.canva-share-btn .share-arrow{font-size:15px;line-height:1;color:#843f39}
+
+/* 2. Barra lateral vertical flotante de íconos estilo Canva */
+.sidebar.canva-rail{
+  position:fixed;
+  top:var(--canva-bar-h);
+  left:0;
+  bottom:0;
+  width:var(--canva-rail-w);
+  padding:14px 8px 14px;
+  background:#ffffff;
+  border-right:1.5px solid #ece1d8;
+  box-shadow:2px 0 14px rgba(44,40,38,.03);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:space-between;
+  overflow-y:auto;
+  overflow-x:hidden;
+  z-index:35;
+  transition:width .2s ease,transform .2s ease;
+}
+
+.rail-mobile-brand{display:none}
+
+.canva-rail-nav{
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+}
+
+.canva-rail-nav a{
+  width:100%;
+  min-height:auto;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  padding:5px 4px;
+  margin:0;
+  border-radius:14px;
+  background:transparent;
+  color:#4c433e;
+  box-shadow:none;
+}
+.canva-rail-nav a:hover{background:#f8f3ef;color:#241f1d}
+.canva-rail-nav a[aria-current=page]{
+  background:transparent;
+  box-shadow:none;
+  color:#843f39;
+}
+
+.rail-tile{
+  width:48px;
+  height:48px;
+  border-radius:14px;
+  background:#ffffff;
+  border:1.5px solid #e7dad0;
+  box-shadow:0 2px 6px rgba(44,40,38,.06);
+  display:grid;
+  place-items:center;
+  position:relative;
+  flex:none;
+  transition:background .15s ease,border-color .15s ease,transform .15s ease,box-shadow .15s ease;
+}
+.rail-tile .icon{width:22px;height:22px;opacity:.85;filter:none}
+.canva-rail-nav a:hover .rail-tile{
+  border-color:#c9968d;
+  background:#fdf6f2;
+  transform:translateY(-1px);
+  box-shadow:0 4px 10px rgba(150,80,74,.14);
+}
+.canva-rail-nav a[aria-current=page] .rail-tile{
+  background:#96504a;
+  border-color:#96504a;
+  box-shadow:0 4px 14px rgba(150,80,74,.32);
+}
+.canva-rail-nav a[aria-current=page] .rail-tile .icon{
+  filter:brightness(0) invert(1);
+  opacity:1;
+}
+
+.rail-tile .nav-count{
+  position:absolute;
+  top:-6px;
+  right:-8px;
+  margin:0;
+  padding:2px 6px;
+  min-width:24px;
+  text-align:center;
+  font-size:10px;
+  font-weight:800;
+  border-radius:999px;
+  background:#96504a;
+  color:#ffffff;
+  border:2px solid #ffffff;
+  box-shadow:0 1px 4px rgba(0,0,0,.15);
+}
+.canva-rail-nav a[aria-current=page] .rail-tile .nav-count{
+  background:#241f1d;
+  color:#ffffff;
+}
+.rail-tile .nav-dot{
+  position:absolute;
+  top:6px;
+  right:6px;
+  width:7px;
+  height:7px;
+  margin:0;
+}
+
+.rail-text{
+  font-size:11.5px;
+  font-weight:700;
+  line-height:1.15;
+  text-align:center;
+  color:#554b46;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.canva-rail-nav a[aria-current=page] .rail-text{
+  color:#843f39;
+  font-weight:800;
+}
+
+/* Botón circular inferior izquierdo con aro degradado brillante (estilo Canva) */
+.canva-rail-bottom{
+  width:100%;
+  padding-top:12px;
+  margin-top:12px;
+  border-top:1px solid #f1e7df;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+.canva-sparkle-fab{
+  border:0;
+  background:transparent;
+  padding:4px;
+  min-height:auto;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:5px;
+  width:100%;
+}
+.canva-sparkle-fab:hover{background:#f8f3ef;border-radius:14px}
+.sparkle-ring{
+  width:48px;
+  height:48px;
+  border-radius:999px;
+  padding:2.5px;
+  background:linear-gradient(135deg,#00c4cc 0%,#7d2ae8 52%,#c97c6d 100%);
+  box-shadow:0 3px 12px rgba(125,42,232,.2);
+  display:grid;
+  place-items:center;
+  transition:transform .16s ease,box-shadow .16s ease;
+}
+.canva-sparkle-fab:hover .sparkle-ring{
+  transform:scale(1.06);
+  box-shadow:0 5px 16px rgba(125,42,232,.28);
+}
+.sparkle-inner{
+  width:100%;
+  height:100%;
+  border-radius:999px;
+  background:#ffffff;
+  display:grid;
+  place-items:center;
+  font-size:20px;
+  line-height:1;
+  color:#7d2ae8;
+}
+
+/* Modo barra lateral expandida opcional (con 1 clic desde Opciones) */
+body.rail-expanded{--canva-rail-w:236px}
+body.rail-expanded .sidebar.canva-rail{
+  align-items:stretch;
+  padding:14px 12px 14px;
+}
+body.rail-expanded .canva-rail-nav{align-items:stretch;gap:4px}
+body.rail-expanded .canva-rail-nav a{
+  flex-direction:row;
+  justify-content:flex-start;
+  gap:12px;
+  padding:7px 10px;
+}
+body.rail-expanded .rail-tile{width:40px;height:40px;border-radius:11px}
+body.rail-expanded .rail-text{font-size:13.5px;text-align:left}
+body.rail-expanded .canva-sparkle-fab{flex-direction:row;justify-content:flex-start;gap:12px;padding:6px 10px}
+body.rail-expanded .sparkle-ring{width:40px;height:40px}
+
+/* Panel flotante de cuenta y opciones rápidas */
+.canva-quick-popover{
+  position:fixed;
+  bottom:18px;
+  left:calc(var(--canva-rail-w) + 12px);
+  width:300px;
+  max-width:calc(100vw - 24px);
+  z-index:60;
+  background:#ffffff;
+  border:1.5px solid #e2d3c8;
+  border-radius:20px;
+  padding:16px;
+  box-shadow:0 14px 40px rgba(36,31,29,.18);
+}
+.canva-pop-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:8px;
+  padding-bottom:12px;
+  margin-bottom:12px;
+  border-bottom:1px solid #f0e6de;
+}
+.canva-pop-profile{border:0;padding:0;margin:0}
+.canva-pop-actions{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.canva-pop-actions button{
+  width:100%;
+  justify-content:flex-start;
+  min-height:46px;
+  padding:10px 14px;
+  border-radius:12px;
+  font-size:13.5px;
+  font-weight:700;
+}
+
+/* 3. Lienzo central amplio estilo Canva */
+main{
+  margin-left:var(--canva-rail-w);
+  padding-top:var(--canva-bar-h);
+  min-height:100dvh;
+  background:#faf8f6;
+  transition:margin-left .2s ease;
+}
+.content{
+  max-width:1580px;
+  margin:0 auto;
+  padding:26px 34px 86px;
+}
+
+/* Modo lienzo amplio (botón inferior derecho estilo Canva) */
+html.canvas-focus-mode .sidebar.canva-rail{transform:translateX(-100%)}
+html.canvas-focus-mode main{margin-left:0}
+html.canvas-focus-mode .canva-quick-popover{left:18px}
+
+/* 4. Dock flotante inferior derecho con deslizador de zoom estilo Canva */
+.canvas-zoom-dock{
+  position:fixed;
+  bottom:16px;
+  right:22px;
+  z-index:38;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 12px;
+  border-radius:14px;
+  background:rgba(255,255,255,.96);
+  backdrop-filter:blur(8px);
+  border:1.5px solid #e4d6ca;
+  box-shadow:0 4px 18px rgba(44,40,38,.1);
+}
+.zoom-step-btn,.zoom-pct-btn,.zoom-focus-btn{
+  min-height:32px;
+  padding:4px 8px;
+  border:0;
+  background:transparent;
+  border-radius:8px;
+  font-size:12.5px;
+  font-weight:800;
+  color:#3c3430;
+}
+.zoom-step-btn:hover,.zoom-pct-btn:hover,.zoom-focus-btn:hover{
+  background:#f4ece6;
+  color:#843f39;
+}
+.zoom-pct-btn{min-width:46px;font-variant-numeric:tabular-nums;background:#f8f3ef}
+.zoom-focus-btn{font-size:16px;padding:4px 9px}
+.zoom-focus-btn[aria-pressed=true]{background:#f6e4e1;color:#843f39}
+.zoom-divider{width:1px;height:20px;background:#e4d6ca}
+#canvas-zoom-range{
+  width:108px;
+  height:4px;
+  min-height:auto;
+  padding:0;
+  border:0;
+  background:transparent;
+  accent-color:#201c1a;
+  cursor:pointer;
+}
+
+/* Modal compartir portal de clientas */
+.share-portal-dialog{width:490px;max-width:calc(100vw - 24px)}
+.share-url-input{margin:12px 0 16px;font-weight:700;color:#843f39;background:#fbf7f3}
+.share-portal-actions{display:flex;flex-direction:column;gap:10px}
+.share-open-btn{text-align:center;text-decoration:none}
+
+/* Responsive Canva Studio Shell (Tablet y Móvil sin desbordamiento) */
+@media(max-width:1100px){
+  .canva-top-search{width:190px}
+  .canva-top-search:focus-within{width:220px}
+  .canva-status-pill{display:none}
+}
+@media(max-width:950px){
+  :root{--canva-rail-w:84px}
+  .canva-brand-tag{display:none}
+  .canva-top-search{display:none}
+  .canva-share-btn span:last-child{display:none}
+  .canva-share-btn{padding:8px 12px}
+}
+@media(max-width:700px){
+  :root{--canva-bar-h:60px;--canva-rail-w:250px}
+  .topbar.canva-topbar{height:var(--canva-bar-h);padding:0 12px;gap:8px}
+  .canva-brand img{height:28px}
+  .canva-brand-tag,.canva-topbar .breadcrumb,.canva-top-search,.canva-top-circle,.canva-status-pill,.canva-share-btn{display:none}
+  .canva-menu-toggle{display:inline-flex}
+  .sidebar.canva-rail{
+    top:var(--canva-bar-h);
+    width:255px;
+    align-items:stretch;
+    padding:14px 12px 24px;
+    transform:translateX(-100%);
+    box-shadow:12px 0 36px rgba(36,31,29,.22);
+  }
+  .sidebar.canva-rail.open{transform:translateX(0)}
+  .rail-mobile-brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:4px 8px 14px;
+    margin-bottom:10px;
+    border-bottom:1px solid #efe4dc;
+    font-size:13px;
+    font-weight:700;
+    color:#241f1d;
+  }
+  .rail-mobile-brand img{height:26px;width:auto}
+  .canva-rail-nav{align-items:stretch;gap:4px}
+  .canva-rail-nav a{flex-direction:row;justify-content:flex-start;gap:12px;padding:7px 10px}
+  .rail-tile{width:40px;height:40px;border-radius:11px}
+  .rail-text{font-size:14px;text-align:left}
+  .canva-sparkle-fab{flex-direction:row;justify-content:flex-start;gap:12px;padding:6px 10px}
+  .sparkle-ring{width:40px;height:40px}
+  .canva-quick-popover{left:12px;right:12px;bottom:78px;width:auto}
+  main{margin-left:0!important;padding-top:var(--canva-bar-h)}
+  .content{padding:18px 14px 96px}
+  .canvas-zoom-dock{display:none}
+  .toast{left:14px;bottom:78px}
+}
+
+
 

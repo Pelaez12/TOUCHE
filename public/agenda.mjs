@@ -114,64 +114,112 @@ async function loadAdminAlerts(){
   }catch{}
 }
 
+function shiftIsoDate(ymd,deltaDays){
+  const d=new Date(ymd+'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate()+deltaDays);
+  return d.toISOString().slice(0,10);
+}
+
+function syncQuickDayButtons(){
+  const t=today(),tmrw=shiftIsoDate(t,1);
+  $('agenda-day-today')?.classList.toggle('is-active',date===t);
+  $('agenda-day-tomorrow')?.classList.toggle('is-active',date===tmrw);
+}
+
 function renderMyBanner(){
   const banner=$('agenda-my-banner');
   const sw=$('agenda-view-switch');
   if(!banner||!sw)return;
   const isStylist=store.isStylist();
-  if($('agenda-title'))$('agenda-title').textContent=isStylist?'Mi agenda':'Agenda del salón';
+  if($('agenda-title'))$('agenda-title').textContent=isStylist?'Mi agenda del día':'Agenda del salón';
   if($('agenda-subtitle'))$('agenda-subtitle').textContent=isStylist
-    ?'Tus citas asignadas del día. Marca cuando llegue tu clienta o avisa a Administración si no llegó.'
-    :'Horarios del equipo, turnos por orden de llegada y confirmaciones por WhatsApp.';
+    ?'Tu panel paso a paso: marca tu llegada, revisa tus clientas y confirma cada atención con un toque.'
+    :'Panel visual del salón: horarios del equipo, orden de llegada y confirmaciones por WhatsApp.';
   if($('agenda-empty-text'))$('agenda-empty-text').textContent=isStylist
-    ?'No tienes citas programadas para este día.'
-    :'Agenda una clienta para organizar sus servicios, tiempos y especialista.';
+    ?'No tienes citas programadas para este día. Puedes revisar «Mañana» arriba o actualizar tu perfil.'
+    :'Agenda una clienta con el botón «+ Agendar clienta» para organizar servicios, tiempos y especialista.';
 
   const me=getMyStaff();
   if(!me){banner.hidden=true;sw.hidden=true;return;}
   banner.replaceChildren();
+  const dayAll=appointments.filter(a=>a.startsAt.startsWith(date));
   if(me.canHoldAppointments){
     sw.hidden=isStylist;
     if(isStylist)agendaScope='mine';
     syncScopeUI();
     const st=staffDayStatus(me,date);
     const sh=dailyShifts.find(s=>s.staffId===me.id);
-    const myCount=appointments.filter(a=>a.startsAt.startsWith(date)&&a.staffId===me.id&&a.status==='scheduled').length;
+    const myDay=dayAll.filter(a=>a.staffId===me.id);
+    const myPending=myDay.filter(a=>a.status==='scheduled').length;
+    const myDone=myDay.filter(a=>a.status==='completed').length;
+    const myTotal=myPending+myDone;
+
     const head=node('div',undefined,'my-banner-top');
-    const left=node('div');
+    const left=node('div',undefined,'my-banner-intro');
     left.append(
-      node('strong',`Hola, ${me.shortName||me.displayName} · ${ROLE_LABELS[me.role]||me.role}`),
+      node('span',ROLE_LABELS[me.role]||me.role,'my-role-pill'),
+      node('strong',`Hola, ${me.shortName||me.displayName} 👋`),
       node('p',st.working
-        ?(myCount?`Tienes ${myCount} cita${myCount===1?'':'s'} programada${myCount===1?'':'s'} este día.`:'No tienes citas asignadas aún en este día.')
+        ?(myPending?`Tienes ${myPending} cita${myPending===1?'':'s'} pendiente${myPending===1?'':'s'} hoy. Sigue los botones grandes en cada tarjeta.`:'Aún no tienes citas pendientes para este día.')
         :`Este día figura como ${st.reason.toLowerCase()}.`)
     );
     const right=node('div',undefined,'my-banner-actions');
     if(st.working){
       if(sh?.status==='present'){
-        right.append(node('span',isStylist?'Llegada registrada hoy':`Tu turno hoy: ${sh.turnOrder}.º lugar`,'mini-tag'));
+        right.append(node('span',isStylist?'✅ Llegada registrada hoy':`✅ Tu turno hoy: ${sh.turnOrder}.º lugar`,'arrival-confirmed-pill'));
       }else{
-        const btn=node('button','Marcar mi llegada','primary tiny-btn');btn.type='button';
+        const btn=node('button','✅ Marcar mi llegada hoy','primary senior-arrival-btn');btn.type='button';
         btn.addEventListener('click',()=>isStylist?saveMyOwnArrival():saveShiftCheckIn(me.id,'present'));
         right.append(btn);
       }
     }
-    const profLink=node('a','Mi perfil y etiquetas','outline-button tiny-btn');
+    const profLink=node('a','🎨 Mis servicios y perfil','outline-button senior-banner-link');
     profLink.href='#perfil';
     right.append(profLink);
     head.append(left,right);
     banner.append(head);
-    banner.append(node('small',`Tus servicios habilitados: ${summarizeStaffServices(me)}`,'my-banner-services'));
+
+    // 3 visual KPI tiles for quick glanceability
+    const kpis=node('div',undefined,'collab-kpi-row');
+    for(const [ico,lbl,val,cls] of [
+      ['📅','Citas del día',myTotal,''],
+      ['⏳','Por atender',myPending,'kpi-amber'],
+      ['✅','Realizadas',myDone,'kpi-green']
+    ]){
+      const tile=node('div',undefined,'collab-kpi-tile '+cls);
+      tile.append(node('span',ico+' '+lbl,'collab-kpi-lbl'),node('strong',String(val),'collab-kpi-val'));
+      kpis.append(tile);
+    }
+    banner.append(kpis);
+    banner.append(node('small',`✨ Tus servicios habilitados: ${summarizeStaffServices(me)}`,'my-banner-services'));
     banner.hidden=false;
   } else {
     sw.hidden=true;agendaScope='all';
+    const salonPending=dayAll.filter(a=>a.status==='scheduled').length;
+    const salonConfirmed=dayAll.filter(a=>a.status==='scheduled'&&a.confirmationStatus==='confirmed').length;
+    const salonDone=dayAll.filter(a=>a.status==='completed').length;
+
     const head=node('div',undefined,'my-banner-top');
-    const left=node('div');
+    const left=node('div',undefined,'my-banner-intro');
     left.append(
-      node('strong',`Hola, ${me.shortName||me.displayName} · Recepción`),
-      node('p','Puedes ver toda la agenda del salón, marcar llegadas, confirmar citas y agendar clientas.')
+      node('span','Recepción · Panel del salón','my-role-pill'),
+      node('strong',`Hola, ${me.shortName||me.displayName} 👋`),
+      node('p','Puedes ver toda la agenda del salón, marcar llegadas del equipo, confirmar citas por WhatsApp y agendar clientas.')
     );
     head.append(left);
     banner.append(head);
+
+    const kpis=node('div',undefined,'collab-kpi-row');
+    for(const [ico,lbl,val,cls] of [
+      ['📅','Programadas',salonPending,''],
+      ['✅','Confirmadas',salonConfirmed,'kpi-green'],
+      ['🎉','Realizadas',salonDone,'kpi-amber']
+    ]){
+      const tile=node('div',undefined,'collab-kpi-tile '+cls);
+      tile.append(node('span',ico+' '+lbl,'collab-kpi-lbl'),node('strong',String(val),'collab-kpi-val'));
+      kpis.append(tile);
+    }
+    banner.append(kpis);
     banner.hidden=false;
   }
 }
@@ -369,10 +417,10 @@ function buildAppointmentCard(a){
   if(a.cancelReason&&(a.status==='cancelled'||a.status==='no_show'))body.append(node('small','Motivo: '+a.cancelReason));
   card.append(body);
 
-  const actions=node('div',undefined,'appt-card-actions');
+  const actions=node('div',undefined,'appt-card-actions senior-appt-actions');
   if(a.status==='scheduled'){
     if(isStylist){
-      const arrivedBtn=node('button',a.arrivalStatus==='arrived'?'✓ Llegó':'Llegó','tiny-btn arrival-arrived-btn'+(a.arrivalStatus==='arrived'?' is-active':''));
+      const arrivedBtn=node('button',a.arrivalStatus==='arrived'?'✓ Clienta llegó':'✅ Clienta llegó','senior-appt-btn arrival-arrived-btn'+(a.arrivalStatus==='arrived'?' is-active':''));
       arrivedBtn.type='button';
       arrivedBtn.disabled=a.arrivalStatus==='arrived';
       arrivedBtn.addEventListener('click',async()=>{
@@ -384,7 +432,7 @@ function buildAppointmentCard(a){
         }catch(e){message(e.message,true);arrivedBtn.disabled=false;}
       });
 
-      const missedBtn=node('button','No llegó','tiny-btn arrival-missed-btn');
+      const missedBtn=node('button','⚠️ No llegó','senior-appt-btn arrival-missed-btn');
       missedBtn.type='button';
       missedBtn.addEventListener('click',async()=>{
         missedBtn.disabled=true;
@@ -395,7 +443,7 @@ function buildAppointmentCard(a){
         }catch(e){message(e.message,true);missedBtn.disabled=false;}
       });
 
-      const remBtn=node('button','Recordatorio','tiny-btn message-button');
+      const remBtn=node('button','🔔 Pedir recordatorio','senior-appt-btn message-button');
       remBtn.type='button';
       remBtn.addEventListener('click',async()=>{
         remBtn.disabled=true;
@@ -406,13 +454,13 @@ function buildAppointmentCard(a){
         finally{remBtn.disabled=false;}
       });
 
-      const comp=node('button','Realizada','tiny-btn');comp.type='button';
+      const comp=node('button','🎉 Marcar realizada','senior-appt-btn');comp.type='button';
       if(Date.parse(a.endsAt)>Date.now()){comp.disabled=true;comp.title='Disponible al finalizar la hora de la cita.';}
       comp.addEventListener('click',()=>confirmAction(a,'complete'));
       actions.append(arrivedBtn,missedBtn,remBtn,comp);
     } else {
       if(!a.staffId){
-        const assignBtn=node('button','Asignar por llegada','primary tiny-btn');assignBtn.type='button';
+        const assignBtn=node('button','⚡ Asignar por llegada','primary senior-appt-btn');assignBtn.type='button';
         assignBtn.addEventListener('click',async()=>{
           assignBtn.disabled=true;
           try{const r=await api('/api/agenda/assign-turn',{method:'POST',body:JSON.stringify({appointmentId:a.id})});message(`Asignada a ${r.assigned.shortName}${r.assigned.turnOrder?' (turno '+r.assigned.turnOrder+')':''}.`);await load();}
@@ -421,8 +469,8 @@ function buildAppointmentCard(a){
         actions.append(assignBtn);
       }
       if(whatsappPhone(a.clientPhone)){
-        for(const [moment,label] of [['day_before','Recordar (día antes)'],['same_day','Recordar (hoy)']]){
-          const wa=node('button',label,'tiny-btn message-button');wa.type='button';
+        for(const [moment,label] of [['day_before','📅 Recordar (día antes)'],['same_day','💬 Recordar (hoy)']]){
+          const wa=node('button',label,'senior-appt-btn message-button');wa.type='button';
           wa.addEventListener('click',async()=>{
             try{
               const url=whatsappLink(a.clientPhone,reminderDraft(a,moment));
@@ -435,22 +483,22 @@ function buildAppointmentCard(a){
         }
       }
       if(a.confirmationStatus!=='confirmed'){
-        const conf=node('button','Confirmó','tiny-btn');conf.type='button';
+        const conf=node('button','✅ Confirmó','senior-appt-btn');conf.type='button';
         conf.addEventListener('click',async()=>{try{await api('/api/appointments/'+a.id+'/confirm',{method:'POST',body:'{}'});await load();}catch(e){message(e.message,true);}});
         actions.append(conf);
       }
-      const edit=node('button','Reprogramar','tiny-btn');edit.type='button';
+      const edit=node('button','🔄 Reprogramar','senior-appt-btn');edit.type='button';
       edit.addEventListener('click',()=>openEditor(a));actions.append(edit);
-      const comp=node('button','Realizada','tiny-btn');comp.type='button';
+      const comp=node('button','🎉 Realizada','senior-appt-btn');comp.type='button';
       if(Date.parse(a.endsAt)>Date.now()){comp.disabled=true;comp.title='Disponible al finalizar la hora de la cita.';}
       comp.addEventListener('click',()=>confirmAction(a,'complete'));actions.append(comp);
-      const ns=node('button','No asistió','tiny-btn');ns.type='button';
+      const ns=node('button','No asistió','senior-appt-btn');ns.type='button';
       ns.addEventListener('click',()=>confirmAction(a,'no-show'));actions.append(ns);
-      const cancel=node('button','Cancelar','tiny-btn');cancel.type='button';
+      const cancel=node('button','Cancelar','senior-appt-btn danger-outline');cancel.type='button';
       cancel.addEventListener('click',()=>confirmAction(a,'cancel'));actions.append(cancel);
     }
   } else if(a.status!=='completed'&&!isStylist){
-    const rebook=node('button','Reprogramar','tiny-btn');rebook.type='button';
+    const rebook=node('button','🔄 Reprogramar','senior-appt-btn');rebook.type='button';
     rebook.addEventListener('click',()=>openEditor(a));actions.append(rebook);
   }
   if(actions.childNodes.length)card.append(actions);
@@ -459,6 +507,7 @@ function buildAppointmentCard(a){
 
 function render(){
   initScopeIfNeeded();
+  syncQuickDayButtons();
   calendar();$('agenda-date').value=date;$('agenda-day-title').textContent=fmtDay(date);
   renderMyBanner();renderTeamBar();renderShiftsBar();
   const isStylist=store.isStylist();
@@ -1289,9 +1338,9 @@ function renderTeamPage(){
     card.append(chips);
 
     const actions=node('div',undefined,'team-card-actions');
-    const editBtn=node('button','Editar y servicios','outline-button tiny-btn');editBtn.type='button';
+    const editBtn=node('button','✏️ Editar y servicios','outline-button senior-team-btn');editBtn.type='button';
     editBtn.addEventListener('click',()=>openStaffEditor(m));
-    const delBtn=node('button','Retirar','tiny-btn danger-outline');delBtn.type='button';
+    const delBtn=node('button','Retirar','senior-team-btn danger-outline');delBtn.type='button';
     delBtn.addEventListener('click',()=>openStaffDelete(m));
     actions.append(editBtn,delBtn);
     card.append(actions);
@@ -1473,6 +1522,10 @@ $('agenda-confirm-close').addEventListener('click',()=>$('agenda-confirm').close
 $('agenda-new').addEventListener('click',()=>openEditor());$('agenda-refresh').addEventListener('click',()=>load(true));
 $('agenda-date').value=date;$('agenda-date').addEventListener('change',()=>selectDate($('agenda-date').value));
 $('agenda-today').addEventListener('click',()=>selectDate(today()));
+$('agenda-day-today')?.addEventListener('click',()=>selectDate(today()));
+$('agenda-day-tomorrow')?.addEventListener('click',()=>selectDate(shiftIsoDate(today(),1)));
+$('agenda-day-prev')?.addEventListener('click',()=>selectDate(shiftIsoDate(date,-1)));
+$('agenda-day-next')?.addEventListener('click',()=>selectDate(shiftIsoDate(date,1)));
 for(const [id,delta] of [['agenda-prev',-1],['agenda-next',1]])$(id).addEventListener('click',()=>{const d=new Date(month+'-01T12:00:00Z');d.setUTCMonth(d.getUTCMonth()+delta);selectDate(d.toISOString().slice(0,10));});
 for(const btn of document.querySelectorAll('[data-agenda-filter]'))btn.addEventListener('click',()=>{
   activeFilter=btn.dataset.agendaFilter;

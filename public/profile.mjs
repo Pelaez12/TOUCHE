@@ -66,6 +66,11 @@ function renderCategoryPanel(){
   const catLvl=catMap.get(selectedCat)||'';
   $('profile-cat-title').textContent=selectedCat?`${selectedCat} (${svcs.length} servicio${svcs.length===1?'':'s'} en catálogo)`:'Selecciona una categoría';
   $('profile-cat-level').value=catLvl;
+  for(const b of document.querySelectorAll('[data-profile-lvl]')){
+    const sel=b.dataset.profileLvl===catLvl;
+    b.classList.toggle('selected',sel);
+    b.setAttribute('aria-pressed',String(sel));
+  }
   $('profile-cat-hint').textContent=catLvl
     ?`Tienes marcada toda la categoría ${selectedCat}. Toca cualquier servicio puntual abajo si deseas excluirlo o marcarlo diferente.`
     :`Toca los servicios puntuales de ${selectedCat} que realizas, o activa arriba toda la categoría.`;
@@ -158,9 +163,8 @@ async function loadProfile(){
   }
 }
 
-$('profile-cat-level')?.addEventListener('change',()=>{
+function applyProfileCategoryLevel(val){
   if(!selectedCat)return;
-  const val=$('profile-cat-level').value;
   if(val)catMap.set(selectedCat,val);
   else catMap.delete(selectedCat);
   // Clean up redundant same-category overrides when toggling whole category
@@ -170,7 +174,12 @@ $('profile-cat-level')?.addEventListener('change',()=>{
     if(!val&&ovrMap.get(s.id)==='disabled')ovrMap.delete(s.id);
   }
   renderTagMenu();
-});
+}
+
+$('profile-cat-level')?.addEventListener('change',()=>applyProfileCategoryLevel($('profile-cat-level').value));
+for(const b of document.querySelectorAll('[data-profile-lvl]')){
+  b.addEventListener('click',()=>applyProfileCategoryLevel(b.dataset.profileLvl));
+}
 
 $('profile-form')?.addEventListener('submit',async e=>{
   e.preventDefault();
