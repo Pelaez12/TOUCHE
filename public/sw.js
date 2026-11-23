@@ -1,4 +1,4 @@
-const CACHE_NAME='touche-shell-v6';
+const CACHE_NAME='touche-shell-v7';
 const SHELL_ASSETS=[
   '/brand/fonts.css',
   '/brand/montserrat-0.woff2',

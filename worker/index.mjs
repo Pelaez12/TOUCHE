@@ -63,7 +63,7 @@ export default {
       if(request.method==='GET'&&path==='/api/clients') {
         if(isStylist)return json({error:'Las estilistas solo tienen acceso a su agenda y a su perfil.'},403);
         const filter=isAdmin?'':' WHERE c.archived_at IS NULL';
-        const [r,trRes,apRes]=await env.DB.batch([
+        const [r,trRes,apRes,svcRes]=await env.DB.batch([
           env.DB.prepare(`SELECT c.id,c.full_name AS name,c.dni,c.phone,c.birthday,c.birthday_raw AS birthdayRaw,c.notes,
             c.identity_status AS identityStatus,c.archived_at AS archivedAt,c.updated_at AS updatedAt,c.in_directory AS inDirectory,
             (SELECT MAX(performed_on) FROM treatments WHERE client_id=c.id) AS lastVisit,
@@ -71,14 +71,15 @@ export default {
             (SELECT COUNT(*) FROM appointments WHERE client_id=c.id AND status='scheduled' AND treatment_id IS NULL) AS scheduledCount
             FROM clients c${filter} ORDER BY c.full_name COLLATE NOCASE`),
           env.DB.prepare('SELECT client_id AS clientId,service_name AS serviceName,category FROM treatments'),
-          env.DB.prepare("SELECT a.client_id AS clientId,s.name AS serviceName,s.category FROM appointments a JOIN services s ON s.id=a.service_id WHERE a.status IN ('scheduled','completed') AND a.treatment_id IS NULL")
+          env.DB.prepare("SELECT a.client_id AS clientId,s.name AS serviceName,s.category FROM appointments a JOIN services s ON s.id=a.service_id WHERE a.status IN ('scheduled','completed') AND a.treatment_id IS NULL"),
+          env.DB.prepare('SELECT id,name,category FROM services WHERE active=1 ORDER BY category COLLATE NOCASE, name COLLATE NOCASE')
         ]);
         const recsByClient=new Map();
         const pushRec=(cid,rec)=>{let arr=recsByClient.get(cid);if(!arr){arr=[];recsByClient.set(cid,arr);}arr.push(rec);};
         for(const t of trRes.results)pushRec(t.clientId,{serviceName:t.serviceName,category:t.category,source:'history'});
         for(const a of apRes.results)pushRec(a.clientId,{serviceName:a.serviceName,category:a.category,source:'agenda'});
         const clients=r.results.map(c=>({...c,interests:summarizeInterests(recsByClient.get(c.id))}));
-        return json({clients,storage:'cloudflare-d1'});
+        return json({clients,services:svcRes.results,storage:'cloudflare-d1'});
       }
       if(request.method==='GET'&&path==='/api/history') {
         if(!isAdmin)return json({error:'Solo Administración puede consultar el reporte de retorno e historial completo.'},403);

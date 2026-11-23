@@ -10,8 +10,140 @@ const displayName=value=>value===value.toUpperCase()?value.toLocaleLowerCase('es
 const initials=name=>name.trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();
 const dateLabel=value=>value?new Intl.DateTimeFormat('es-PE',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(value+'T12:00:00Z')):'Sin registro';
 const birthdayLabel=value=>value?new Intl.DateTimeFormat('es-PE',{day:'2-digit',month:'long',timeZone:'UTC'}).format(new Date(value+'T12:00:00Z')):'Por completar';
-let clients=[],directoryStatus='active',page=1,pendingDelete=null,toastTimer;
+let clients=[],salonServices=[],directoryStatus='active',page=1,pendingDelete=null,toastTimer;
+let editorSelectedPrefs=[],editorPrefCat='ALL';
 const pageSize=15;
+const PREF_CAT_META={
+  COLOR:{emoji:'🎨',label:'Color'},
+  CORTE:{emoji:'✂️',label:'Corte'},
+  TRATAMIENTO:{emoji:'💆‍♀️',label:'Tratamiento'},
+  'QUÍMICO':{emoji:'✨',label:'Químico'},
+  PEINADO:{emoji:'💇‍♀️',label:'Peinado'},
+  'MANOS / PIES':{emoji:'💅',label:'Manos / Pies'},
+  MAQUILLAJE:{emoji:'💄',label:'Maquillaje'},
+  DEPILACION:{emoji:'🌿',label:'Depilación'},
+  'ASESORÍA':{emoji:'💬',label:'Asesoría'}
+};
+function formatServiceLabel(raw){
+  const s=String(raw||'').trim().replace(/\s+/g,' ');
+  if(!s)return '';
+  if(s!==s.toUpperCase())return s;
+  const lower=s.toLocaleLowerCase('es');
+  const firstCap=lower.charAt(0).toLocaleUpperCase('es')+lower.slice(1);
+  return firstCap
+    .replace(/\b(shades|botox|olaplex|k18|redken|keratina|balayage|babylights|manicure|pedicure|spa|gel|rubber|acrílico|acrilico)\b/gi,m=>m.charAt(0).toUpperCase()+m.slice(1).toLowerCase())
+    .replace(/\b(led|uv|3d)\b/gi,m=>m.toUpperCase());
+}
+function parseNotesAndPrefs(rawNotes){
+  const lines=String(rawNotes||'').split(/\r?\n/);
+  const prefs=[];const seen=new Set();const freeLines=[];
+  const svcByClean=new Map(salonServices.map(s=>[clean(s.name),formatServiceLabel(s.name)]));
+  for(const line of lines){
+    const m=line.match(/^\s*(?:Preferencias|Servicios frecuentes)\s*:\s*(.+)$/i);
+    if(m){
+      for(const part of m[1].split(',')){
+        const trimmed=part.trim();if(!trimmed)continue;
+        const key=clean(trimmed);if(seen.has(key))continue;
+        seen.add(key);
+        prefs.push(svcByClean.get(key)||formatServiceLabel(trimmed));
+      }
+    } else if(line.trim()||freeLines.length){
+      freeLines.push(line);
+    }
+  }
+  return {prefs,freeNotes:freeLines.join('\n').trim()};
+}
+function composeNotesWithPrefs(prefs,freeNotes){
+  const cleanFree=String(freeNotes||'').trim();
+  if(!prefs.length)return cleanFree;
+  const prefLine=`Preferencias: ${prefs.join(', ')}`;
+  return cleanFree?`${prefLine}\n${cleanFree}`:prefLine;
+}
+function togglePrefTag(label){
+  const key=clean(label);
+  const idx=editorSelectedPrefs.findIndex(x=>clean(x)===key);
+  if(idx>=0)editorSelectedPrefs.splice(idx,1);
+  else editorSelectedPrefs.push(label);
+  renderPrefPicker();
+}
+function renderPrefPicker(){
+  const selectedBox=$('pref-selected-chips');
+  const countEl=$('pref-selected-count');
+  const clearBtn=$('pref-clear-btn');
+  const catTabs=$('pref-cat-tabs');
+  const grid=$('pref-service-grid');
+  if(!selectedBox||!catTabs||!grid)return;
+
+  const selectedKeys=new Set(editorSelectedPrefs.map(clean));
+  if(countEl)countEl.textContent=`Servicios elegidos (${editorSelectedPrefs.length})`;
+  if(clearBtn)clearBtn.hidden=editorSelectedPrefs.length===0;
+
+  selectedBox.replaceChildren();
+  if(!editorSelectedPrefs.length){
+    selectedBox.append(node('span','Toca cualquier etiqueta abajo para guardarla como preferencia rápida.','pref-empty-hint'));
+  } else {
+    for(const tag of editorSelectedPrefs){
+      const chip=node('button',undefined,'pref-selected-chip');
+      chip.type='button';
+      chip.title='Quitar '+tag;
+      chip.append(node('span','✓ '+tag),node('span','×','pref-chip-x'));
+      chip.addEventListener('click',()=>togglePrefTag(tag));
+      selectedBox.append(chip);
+    }
+  }
+
+  const byCat=new Map();
+  for(const s of salonServices){
+    const c=s.category||'OTROS';
+    if(!byCat.has(c))byCat.set(c,[]);
+    byCat.get(c).push(s);
+  }
+  const cats=['ALL',...byCat.keys()];
+  if(editorPrefCat!=='ALL'&&!byCat.has(editorPrefCat))editorPrefCat='ALL';
+
+  catTabs.replaceChildren();
+  for(const cat of cats){
+    const btn=node('button',undefined,'pref-cat-btn'+(editorPrefCat===cat?' is-active':''));
+    btn.type='button';
+    btn.role='tab';
+    btn.setAttribute('aria-selected',String(editorPrefCat===cat));
+    if(cat==='ALL'){
+      btn.textContent=`✨ Todos (${salonServices.length})`;
+    } else {
+      const meta=PREF_CAT_META[cat]||{emoji:'✨',label:formatServiceLabel(cat)};
+      btn.textContent=`${meta.emoji} ${meta.label} (${byCat.get(cat).length})`;
+    }
+    btn.addEventListener('click',()=>{editorPrefCat=cat;renderPrefPicker();});
+    catTabs.append(btn);
+  }
+
+  const q=clean($('pref-service-search')?.value||'').trim();
+  const visible=salonServices.filter(s=>{
+    const label=formatServiceLabel(s.name);
+    if(q)return clean(s.name).includes(q)||clean(label).includes(q)||clean(s.category).includes(q);
+    return editorPrefCat==='ALL'||s.category===editorPrefCat;
+  });
+
+  grid.replaceChildren();
+  if(!salonServices.length){
+    grid.append(node('p','Cargando servicios del salón…','pref-empty-hint'));
+    return;
+  }
+  if(!visible.length){
+    grid.append(node('p','No encontramos ese servicio. Prueba otra palabra o toca «Todos».','pref-empty-hint'));
+    return;
+  }
+  for(const s of visible){
+    const label=formatServiceLabel(s.name);
+    const active=selectedKeys.has(clean(s.name))||selectedKeys.has(clean(label));
+    const btn=node('button',undefined,'pref-service-tag'+(active?' is-selected':''));
+    btn.type='button';
+    btn.setAttribute('aria-pressed',String(active));
+    btn.append(node('span',active?'✓':'+','pref-tag-mark'),node('span',label));
+    btn.addEventListener('click',()=>togglePrefTag(label));
+    grid.append(btn);
+  }
+}
 async function api(path,options={}){
   const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...options.headers}});
   let body;try{body=await response.json();}catch{throw Error('No se pudo completar la operación. Inténtalo de nuevo.');}
@@ -37,6 +169,7 @@ function populateInterestFilter(){
 }
 async function refreshClients(){
   const result=await api('/api/clients');clients=result.clients;
+  if(Array.isArray(result.services)&&result.services.length)salonServices=result.services;
   $('connection-status').className='connection-status connected';$('connection-status').lastElementChild.textContent='En línea';
   $('footer-source').textContent='Touché Hair Studio · Horario de Perú';$('clients-error').hidden=true;
   const active=clients.filter(c=>!c.archivedAt).length,archived=clients.length-active;
@@ -50,7 +183,7 @@ function currentClients(){
   const query=clean($('client-search').value).trim();
   const order=$('directory-sort').value;
   const interest=$('directory-interest')?.value||'';
-  return clients.filter(c=>inDirectoryGroup(c,directoryStatus)&&(!interest||(c.interests||[]).some(i=>i.label===interest))&&(!query||clean(c.name).includes(query)||clean(c.dni).includes(query)||clean(c.phone).replace(/\s/g,'').includes(query.replace(/\s/g,''))||(c.interests||[]).some(i=>clean(i.label).includes(query))))
+  return clients.filter(c=>inDirectoryGroup(c,directoryStatus)&&(!interest||(c.interests||[]).some(i=>i.label===interest))&&(!query||clean(c.name).includes(query)||clean(c.dni).includes(query)||clean(c.phone).replace(/\s/g,'').includes(query.replace(/\s/g,''))||clean(c.notes).includes(query)||(c.interests||[]).some(i=>clean(i.label).includes(query))))
     .sort((a,b)=>order==='recent'?(b.lastVisit||'').localeCompare(a.lastVisit||'')||a.name.localeCompare(b.name,'es'):order==='visits'?b.visits-a.visits||a.name.localeCompare(b.name,'es'):a.name.localeCompare(b.name,'es'));
 }
 let historyClient=null;
@@ -140,10 +273,23 @@ function renderDirectory(){
     nameButton.type='button';
     nameButton.addEventListener('click',()=>client.archivedAt?restoreClient(client,nameButton):openEditor(client));
     copy.append(nameButton,node('small',client.dni?'DNI ····'+client.dni.slice(-4):'DNI por completar','senior-dni-pill'));
-    if(client.interests?.length){
+    const parsedRowPrefs=parseNotesAndPrefs(client.notes).prefs;
+    const shownPills=[];
+    const seenPillKeys=new Set();
+    for(const it of (client.interests||[]).slice(0,2)){
+      seenPillKeys.add(clean(it.label));
+      shownPills.push({label:it.label,cls:'row-interest-pill'+(it.primary?' primary-int':'')});
+    }
+    for(const pref of parsedRowPrefs){
+      if(shownPills.length>=3)break;
+      if(seenPillKeys.has(clean(pref)))continue;
+      seenPillKeys.add(clean(pref));
+      shownPills.push({label:'★ '+pref,cls:'row-interest-pill pref-row-pill'});
+    }
+    if(shownPills.length){
       const intRow=node('div',undefined,'client-row-interests senior-interests-row');
-      for(const it of client.interests.slice(0,2)){
-        intRow.append(node('span',it.label,'row-interest-pill'+(it.primary?' primary-int':'')));
+      for(const it of shownPills){
+        intRow.append(node('span',it.label,it.cls));
       }
       copy.append(intRow);
     }
@@ -204,7 +350,11 @@ let editorOrigin=null,savedEditorClient=null;
 function openEditor(client=null,origin=null){
   editorOrigin=origin;savedEditorClient=null;
   closeSuggestions();$('client-form').reset();$('editor-error').hidden=true;
-  $('edit-id').value=client?.id||'';$('edit-name').value=client?.name||'';$('edit-phone').value=client?.phone||'';$('edit-birthday').value=client?.birthday||'';$('edit-notes').value=client?.notes||'';
+  const parsed=parseNotesAndPrefs(client?.notes||'');
+  editorSelectedPrefs=parsed.prefs;
+  editorPrefCat='ALL';
+  if($('pref-service-search'))$('pref-service-search').value='';
+  $('edit-id').value=client?.id||'';$('edit-name').value=client?.name||'';$('edit-phone').value=client?.phone||'';$('edit-birthday').value=client?.birthday||'';$('edit-notes').value=parsed.freeNotes;
   $('edit-dni').value=client?.dni||'';$('edit-dni').required=!client||!!client.dni;
   $('dni-help').textContent=client&&!client.dni?'Esta ficha importada tiene el DNI pendiente. Puedes completarlo sin perder su historial.':'El DNI es obligatorio y no puede repetirse en otra ficha, incluso eliminada.';
   $('editor-title').textContent=client?'Editar clienta':'Nueva clienta';$('editor-avatar').textContent=client?initials(client.name):'+';
@@ -212,6 +362,17 @@ function openEditor(client=null,origin=null){
   $('birthday-original').hidden=!client?.birthdayRaw||!!client?.birthday;
   $('birthday-original').textContent=client?.birthdayRaw?`Dato original del Excel: ${client.birthdayRaw}. Confirma la fecha antes de guardarla.`:'';
   $('save-client').textContent=client?'Guardar cambios':'Guardar clienta';$('save-client').disabled=false;
+  renderPrefPicker();
+  if(!salonServices.length&&!store.isStylist()){
+    api('/api/clients').then(res=>{
+      if(Array.isArray(res.services)&&res.services.length){
+        salonServices=res.services;
+        const reparsed=parseNotesAndPrefs(composeNotesWithPrefs(editorSelectedPrefs,$('edit-notes').value));
+        editorSelectedPrefs=reparsed.prefs;
+        renderPrefPicker();
+      }
+    }).catch(()=>{});
+  }
   $('client-editor').showModal();$('edit-name').focus();
 }
 async function afterMutation(){
@@ -219,7 +380,8 @@ async function afterMutation(){
 }
 $('client-form').addEventListener('submit',async event=>{
   event.preventDefault();const button=$('save-client');if(button.disabled)return;button.disabled=true;button.textContent='Guardando…';$('editor-error').hidden=true;
-  const id=$('edit-id').value,body={name:$('edit-name').value,dni:$('edit-dni').value,phone:$('edit-phone').value,birthday:$('edit-birthday').value,notes:$('edit-notes').value};
+  const combinedNotes=composeNotesWithPrefs(editorSelectedPrefs,$('edit-notes').value);
+  const id=$('edit-id').value,body={name:$('edit-name').value,dni:$('edit-dni').value,phone:$('edit-phone').value,birthday:$('edit-birthday').value,notes:combinedNotes};
   try{const result=await api(id?'/api/clients/'+encodeURIComponent(id):'/api/clients',{method:id?'PATCH':'POST',body:JSON.stringify(body)});savedEditorClient={...body,id:result.id||id};$('client-editor').close();notify(id?'Cambios guardados.':'Clienta guardada.');await afterMutation();}
   catch(error){$('editor-error').textContent=error.message;$('editor-error').hidden=false;}
   finally{button.disabled=false;button.textContent=id?'Guardar cambios':'Guardar clienta';}
@@ -265,6 +427,8 @@ $('client-editor').addEventListener('cancel',event=>{if($('save-client').disable
 for(const id of ['close-editor','cancel-edit'])$(id).addEventListener('click',()=>{if(!$('save-client').disabled)$('client-editor').close();});
 $('cancel-delete').addEventListener('click',()=>$('delete-dialog').close());
 $('client-search').addEventListener('input',debounce(()=>{page=1;renderDirectory();},150));
+$('pref-service-search')?.addEventListener('input',debounce(()=>renderPrefPicker(),100));
+$('pref-clear-btn')?.addEventListener('click',()=>{editorSelectedPrefs=[];renderPrefPicker();});
 $('directory-sort').addEventListener('change',()=>{page=1;renderDirectory();});
 $('directory-interest')?.addEventListener('change',()=>{page=1;renderDirectory();});
 for(const id of ['client-history-close','client-history-done'])$(id)?.addEventListener('click',()=>$('client-history-modal').close());

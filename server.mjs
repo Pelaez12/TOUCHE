@@ -26,7 +26,7 @@ createServer(async(req,res)=>{
   }
   if(!['GET','HEAD'].includes(req.method)){send(405,'');return;}
   let path=url.pathname==='/'?'index.html':url.pathname.slice(1);
-  if(!/^(index\.html|style\.css|manifest\.webmanifest|sw\.js|pwa\.mjs|profile\.mjs|store\.mjs|app\.mjs|clients\.mjs|analytics\.mjs|contact\.mjs|agenda\.mjs|accounts\.mjs|session\.mjs|login\.mjs|login\.css|login\.html|brand\/[a-zA-Z0-9._-]+|icons\/[a-zA-Z0-9._-]+)$/.test(path)){send(404,'No encontrado','text/plain');return;}
+  if(!/^(index\.html|style\.css|manifest\.webmanifest|sw\.js|pwa\.mjs|profile\.mjs|store\.mjs|app\.mjs|clients\.mjs|analytics\.mjs|contact\.mjs|agenda\.mjs|accounts\.mjs|session\.mjs|canva-shell\.mjs|login\.mjs|login\.css|login\.html|brand\/[a-zA-Z0-9._-]+|icons\/[a-zA-Z0-9._-]+)$/.test(path)){send(404,'No encontrado','text/plain');return;}
   const extension='.'+path.split('.').at(-1);
   try {send(200,await readFile(new URL('public/'+path,root)),types[extension]||'application/octet-stream');}
   catch {send(404,'No encontrado','text/plain');}

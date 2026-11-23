@@ -341,12 +341,14 @@ test('client history endpoint returns exact service, date, time, and automatic i
   // Stylist cannot access client history (403)
   assert.equal((await req(db,'/api/clients/c-active/history',{cookie:miriamCookie})).status,403);
 
-  // GET /api/clients includes automatic interests
+  // GET /api/clients includes automatic interests and full active salon service catalog for preference tags
   const list=await req(db,'/api/clients',{cookie:adminCookie});
   const active=list.body.clients.find(c=>c.id==='c-active');
   assert.equal(active.interests[0].label,'Shades');
   assert.equal(active.interests[0].primary,true);
   assert.ok(active.interests.some(i=>i.label==='Spa Capilar Detox'));
+  assert.ok(Array.isArray(list.body.services)&&list.body.services.length>=1);
+  assert.ok(list.body.services.some(s=>s.name==='SPA CAPILAR DETOX'&&s.category==='SPA'));
 
   // GET /api/clients/:id/history returns exact date, clock time for agenda, and automatic interests
   const hist=await req(db,'/api/clients/c-active/history',{cookie:adminCookie});
