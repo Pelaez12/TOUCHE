@@ -2482,3 +2482,99 @@ html.canvas-focus-mode .canva-quick-popover{left:18px}
 
 
 
+
+/* ==========================================================================
+   EXPERT-CODE FIX PASS (Fase 1 diseño móvil + escritorio)
+   ========================================================================== */
+html{scroll-padding-top:calc(var(--canva-bar-h) + 14px)}
+.results,#admin-alerts-panel{scroll-margin-top:calc(var(--canva-bar-h) + 14px)}
+
+/* Avatar siempre visible (antes se ocultaba en <=950px) */
+.topbar .canva-avatar-btn{display:inline-grid!important;place-items:center}
+
+/* Hamburguesa: nunca blanco sobre blanco */
+.canva-menu-toggle:hover,.canva-menu-toggle:focus,.canva-menu-toggle[aria-expanded=true]{background:rgba(255,255,255,.28)!important;border-color:rgba(255,255,255,.55)!important;color:#fff}
+
+/* Estado de conexión alto contraste */
+.canva-status-pill{color:#fff;background:rgba(0,0,0,.22)}
+.canva-status-pill.offline{background:#fff0ee;color:#9d251e}
+
+/* WhatsApp con contraste >= 4.5:1 */
+.senior-btn-wa,.senior-open-wa{background:#1e6b43!important;border-color:#1e6b43!important;color:#fff!important;box-shadow:0 2px 8px rgba(30,107,67,.25)}
+.senior-btn-wa:hover,.senior-open-wa:hover{background:#175534!important;border-color:#175534!important}
+.subtle,footer{color:#655b55}
+
+/* Paginación: flechas visibles y "Siguiente" completo */
+.senior-pagination span{padding:0;font-size:inherit}
+.senior-pagination .icon{width:16px!important;height:16px!important}
+.senior-pagination > div > #client-page-number{font-size:14px;font-weight:700;padding:10px 16px}
+.senior-pagination button{white-space:nowrap}
+
+/* Modales caben en 390px */
+dialog{max-width:min(660px,calc(100vw - 24px))}
+.delete-dialog{width:min(440px,calc(100vw - 24px));max-width:calc(100vw - 24px)}
+.share-copy-feedback{margin:12px 0 0;padding:10px 12px;border-radius:9px;background:#eaf5ee;color:#195031;font-weight:700;font-size:14px}
+
+/* Guerra de especificidad: los estilos senior ganan */
+.return-preset-pills button.senior-period-btn{min-height:68px;padding:14px 18px;border-radius:12px;border:2px solid #ddd1ca;background:#faf7f5;color:#25201e;font-size:15px;font-weight:700}
+.return-preset-pills button.senior-period-btn.selected{background:#ac6660;border-color:#ac6660;color:#fff}
+.next-step-options button.senior-action-tile{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:16px 18px;border:2px solid #ded3cb;border-radius:12px}
+.next-step-options .senior-action-tile .tile-title{font-size:14.5px;font-weight:700}
+.next-step-options .senior-action-tile .tile-desc{font-size:12px;font-weight:400}
+.next-step-options .senior-action-tile .tile-badge{font-size:28px;font-weight:800;grid-row:auto}
+.next-step-options .senior-action-tile .tile-icon{font-size:26px}
+.tabs button.senior-tab-btn{min-height:44px;padding:8px 16px;font-size:13.5px;border:1px solid #ddd1ca;background:#faf7f5;color:#554c48}
+.tabs button.senior-tab-btn.selected{background:#ac6660;border-color:#ac6660;color:#fff;font-weight:700}
+.return-actions button.senior-action-btn{min-height:48px;padding:10px 16px;font-size:13.5px;font-weight:700}
+.row-actions button.senior-table-btn{min-height:44px;padding:8px 14px;font-size:13.5px;font-weight:700;border-radius:8px;color:#3e3632}
+.row-actions button.senior-btn-edit{background:#f5f0ec;border:1.5px solid #dcd1ca}
+.row-actions button.senior-btn-delete{background:#fff;border:1.5px solid #ebdcd8;color:#a0534a}
+.row-actions button.senior-btn-restore{background:#f4f9f4;border:1.5px solid #cce5cc;color:#2e7d32}
+.client .senior-client-name{font-size:15.5px;font-weight:700}
+.client .senior-client-phone{font-size:13.5px}
+.client .senior-dni-pill{font-size:12px}
+.editor-body input.senior-input,.editor-body textarea.senior-textarea,.editor-body input,.editor-body textarea,.editor-body select{font-size:16px}
+#message-body.senior-msg-textarea{font-size:15px}
+.stats article.senior-kpi-card{padding:18px 20px;border:2px solid #e2d6cf;border-radius:12px}
+.senior-kpi-card p{padding-right:28px}
+.senior-btn-main{white-space:nowrap}
+select{line-height:1.3}
+
+/* Equipo: tabla de duraciones legible */
+@media(max-width:700px){
+  .service-dur-row{grid-template-columns:1fr 1fr auto;gap:8px}
+  .service-dur-row > span{grid-column:1/-1;font-weight:700}
+  .team-durations-card{padding:16px 14px}
+  .senior-dir-tabs{gap:8px;border-bottom:0}
+  .senior-dir-tabs button{border:1.5px solid #e2d5cb!important;border-radius:999px!important;padding:8px 14px!important;font-size:13px!important;min-height:42px!important;background:#fff!important}
+  .senior-dir-tabs > .active{background:#f6e4e1!important;border-color:#ac6660!important}
+  .senior-dir-tabs > .active:after{display:none}
+  .heading .primary.senior-btn-main{font-size:15px;min-height:50px;padding:12px 18px}
+  .senior-pagination{flex-direction:column;align-items:stretch;gap:12px}
+  .senior-pagination > div{justify-content:space-between}
+  .senior-pagination button{padding:10px 12px}
+
+  /* Topbar móvil con safe-area */
+  :root{--canva-bar-h:calc(60px + env(safe-area-inset-top))}
+  .topbar.canva-topbar{min-height:0;height:var(--canva-bar-h);padding:env(safe-area-inset-top) 12px 0}
+  /* Portal clientas compacto (solo ícono) visible en móvil */
+  .canva-topbar .canva-share-btn{display:inline-flex;padding:8px 11px;min-height:38px}
+  .canva-topbar .canva-share-btn span:last-child{display:none}
+  #canva-rail-toggle{display:none}
+  /* Drawer por encima de la barra inferior: Opciones 100% visible */
+  .sidebar.canva-rail{z-index:55;padding-bottom:calc(82px + env(safe-area-inset-bottom))}
+  .toast{bottom:calc(78px + env(safe-area-inset-bottom))}
+  .canva-quick-popover{bottom:calc(78px + env(safe-area-inset-bottom));z-index:60}
+}
+
+/* Dock de zoom colapsable: nunca tapa botones ni tablas */
+.content{padding-bottom:96px}
+.canvas-zoom-dock.is-collapsed{padding:0;background:transparent;border:0;box-shadow:none;backdrop-filter:none}
+.canvas-zoom-controls{display:flex;align-items:center;gap:8px}
+.canvas-zoom-controls[hidden]{display:none!important}
+.zoom-toggle-pill{min-height:36px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.96);border:1.5px solid #e4d6ca;box-shadow:0 3px 12px rgba(44,40,38,.12);font-size:12.5px;font-weight:800;color:#3c3430;opacity:.85}
+.zoom-toggle-pill:hover{opacity:1;background:#fff}
+.zoom-close-btn{min-height:32px;padding:4px 9px;border:0;background:transparent;font-size:16px;font-weight:800;color:#3c3430}
+.toast{left:calc(var(--canva-rail-w) + 20px)}
+@media(max-width:700px){.toast{left:14px}}
+@media(max-width:700px){html.canvas-focus-mode .sidebar.canva-rail{transform:translateX(-100%)}}

@@ -147,8 +147,19 @@ async function loadProfile(){
     }
 
     const canEditTags=!!(st&&st.canHoldAppointments);
+    const isJunior=st&&(st.seniorityTier==='junior'||st.role==='junior_stylist_assistant');
     $('profile-tags-card').hidden=!canEditTags;
-    $('profile-save-btn').textContent=canEditTags?'Guardar mi perfil y etiquetas':'Guardar mi perfil';
+    $('profile-save-btn').textContent=canEditTags?'💾 Guardar mi perfil y etiquetas':'💾 Guardar mi perfil';
+    const guideText=$('profile-guide-text');
+    if(guideText){
+      guideText.innerHTML=canEditTags
+        ?'Sigue los pasos <strong>1 y 2</strong> y pulsa el botón grande <strong>«Guardar mi perfil y etiquetas»</strong>. Si solo quieres cambiar tu contraseña, usa el recuadro de contraseña (Paso 3).'
+        :'Actualiza tu nombre en el <strong>Paso 1</strong> y pulsa <strong>«Guardar mi perfil»</strong>. Si deseas cambiar tu contraseña, usa el recuadro de contraseña (Paso 3).';
+    }
+    const primaryBtn=document.querySelector('[data-profile-lvl="primary"]');
+    if(primaryBtn)primaryBtn.hidden=!!isJunior;
+    const primaryOpt=$('profile-cat-level')?.querySelector('option[value="primary"]');
+    if(primaryOpt)primaryOpt.hidden=!!isJunior;
     if(canEditTags){
       catMap=new Map((profileData.categories||[]).map(c=>[c.category,c.capabilityLevel]));
       ovrMap=new Map((profileData.serviceOverrides||[]).map(o=>[o.serviceId,o.capabilityLevel]));
@@ -159,6 +170,7 @@ async function loadProfile(){
     status.textContent='';
   }catch(e){
     status.textContent='';
+    if($('profile-role-meta'))$('profile-role-meta').textContent='No se pudo cargar tu perfil. Intenta recargar.';
     err.textContent=e.message;err.hidden=false;
   }
 }

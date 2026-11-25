@@ -167,10 +167,17 @@ function populateInterestFilter(){
   }
   sel.value=counts.has(prev)?prev:'';
 }
+function setConnectionState(online){
+  const el=$('connection-status');if(!el)return;
+  el.classList.add('connection-status','canva-status-pill');
+  el.classList.toggle('connected',online);
+  el.classList.toggle('offline',!online);
+  el.lastElementChild.textContent=online?'En línea':'Sin internet';
+}
 async function refreshClients(){
   const result=await api('/api/clients');clients=result.clients;
   if(Array.isArray(result.services)&&result.services.length)salonServices=result.services;
-  $('connection-status').className='connection-status connected';$('connection-status').lastElementChild.textContent='En línea';
+  setConnectionState(true);
   $('footer-source').textContent='Touché Hair Studio · Horario de Perú';$('clients-error').hidden=true;
   const active=clients.filter(c=>!c.archivedAt).length,archived=clients.length-active;
   const contactable=clients.filter(c=>!c.archivedAt&&whatsappPhone(c.phone)).length;
@@ -444,7 +451,7 @@ $('client-prev').addEventListener('click',()=>{page--;renderDirectory();});$('cl
 for(const button of document.querySelectorAll('[data-directory-status]'))button.addEventListener('click',()=>{directoryStatus=button.dataset.directoryStatus;page=1;closeSuggestions();document.querySelectorAll('[data-directory-status]').forEach(b=>{b.classList.toggle('active',b===button);b.setAttribute('aria-pressed',String(b===button));});renderDirectory();});
 $('menu-toggle').addEventListener('click',()=>{const open=$('sidebar').classList.toggle('open');$('menu-toggle').setAttribute('aria-expanded',String(open));});
 document.addEventListener('pointerdown',event=>{if(!event.target.closest('.autocomplete'))closeSuggestions();if(window.innerWidth<=700&&!event.target.closest('.sidebar')&&!event.target.closest('#menu-toggle')){$('sidebar').classList.remove('open');$('menu-toggle').setAttribute('aria-expanded','false');}});
-document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();$('global-search').focus();}});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('sidebar')?.classList.contains('open')){$('sidebar').classList.remove('open');$('menu-toggle')?.setAttribute('aria-expanded','false');}if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();$('global-search').focus();}});
 autocomplete('global-search','global-suggestions');autocomplete('client-search','client-suggestions');
 $('edit-birthday').max=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date());
 let clientsLoaded=false,clientsDirty=true;
@@ -453,7 +460,7 @@ async function ensureClients(force=false){
   if(!force&&clientsLoaded&&!clientsDirty)return;
   if(!force&&activePage()!=='clients')return;
   try{await refreshClients();clientsLoaded=true;clientsDirty=false;store.clients=clients.filter(c=>!c.archivedAt);}
-  catch(error){showError(error);$('connection-status').className='connection-status offline';$('connection-status').lastElementChild.textContent='Sin internet';$('directory-count').textContent='Directorio no disponible';$('client-pagination-label').textContent='Revisa tu conexión y recarga la página.';}
+  catch(error){showError(error);setConnectionState(false);$('directory-count').textContent='Directorio no disponible';$('client-pagination-label').textContent='Revisa tu conexión y recarga la página.';}
 }
 $('global-search').addEventListener('focus',()=>{if(!clientsLoaded)ensureClients(true);});
 window.addEventListener('hashchange',()=>{if(activePage()==='clients')ensureClients();});
@@ -463,8 +470,7 @@ window.addEventListener('touche:agenda-bootstrapped',event=>{
   const count=event.detail?.activeClients;
   if(typeof count==='number'){
     $('nav-client-count').textContent=count;
-    $('connection-status').className='connection-status connected';
-    $('connection-status').lastElementChild.textContent='En línea';
+    setConnectionState(true);
     $('footer-source').textContent='Touché Hair Studio · Horario de Perú';
   }
 });

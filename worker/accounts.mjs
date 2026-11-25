@@ -65,9 +65,10 @@ export async function handleAccounts(request,db,readBody,actor,currentSessionHas
         fields.push('shortName','specialtySummary');
 
         if(staffMember.canHoldAppointments&&(Object.hasOwn(body,'categories')||Object.hasOwn(body,'serviceOverrides'))){
-          const VALID_CAT_CAPS=['primary','junior','plan_b'];
-          const VALID_OVR_CAPS=['primary','junior','plan_b','disabled'];
-          const defaultLvl=staffMember.seniorityTier==='junior'?'junior':'primary';
+          const isJuniorStaff=staffMember.seniorityTier==='junior'||staffMember.role==='junior_stylist_assistant';
+          const VALID_CAT_CAPS=isJuniorStaff?['junior','plan_b']:['primary','junior','plan_b'];
+          const VALID_OVR_CAPS=isJuniorStaff?['junior','plan_b','disabled']:['primary','junior','plan_b','disabled'];
+          const defaultLvl=isJuniorStaff?'junior':'primary';
           const [validCatRows,validSvcRows]=await db.batch([
             db.prepare('SELECT DISTINCT category FROM services WHERE active=1'),
             db.prepare('SELECT id FROM services WHERE active=1')

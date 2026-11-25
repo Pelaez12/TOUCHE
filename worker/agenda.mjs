@@ -236,8 +236,10 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
   if(path==='/api/agenda/my-arrival'&&method==='POST'){
     if(!actor?.staffId)return response({error:'Tu cuenta no está vinculada a una ficha de estilista.'},400);
     let body={};try{if(request.headers.get('content-type')?.includes('application/json'))body=await readBody(request);}catch{}
-    const day=body?.day||new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date());
+    const todayLima=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date());
+    const day=body?.day||todayLima;
     if(!validDay(day))return response({error:'Fecha no válida.'},400);
+    if(day!==todayLima&&!isAdmin)return response({error:'Solo puedes marcar tu llegada el día de hoy.'},400);
     const existingShift=await db.prepare('SELECT day,staff_id AS staffId,turn_order AS turnOrder,checked_in_at AS checkedInAt,status FROM staff_daily_shifts WHERE day=? AND staff_id=?').bind(day,actor.staffId).first();
     if(existingShift&&existingShift.status==='present')return response({saved:true,shift:existingShift});
     const [maxRow,member]=await db.batch([
@@ -470,18 +472,19 @@ export async function handleAgenda(request,db,readBody,actor=DEFAULT_ACTOR){
     const id=staffMatch[1];
     const existing=await db.prepare('SELECT id,display_name AS displayName FROM staff WHERE id=?').bind(id).first();
     if(!existing)return response({error:'Colaboradora no encontrada.'},404);
-    const [sched,histAppt,histTr,histFollow,linkedAcct]=await db.batch([
+    const [sched,histAppt,histTr,histFollow,linkedAcct,histAlerts]=await db.batch([
       db.prepare("SELECT COUNT(*) AS c FROM appointments WHERE staff_id=? AND status='scheduled'").bind(id),
       db.prepare('SELECT COUNT(*) AS c FROM appointments WHERE staff_id=?').bind(id),
       db.prepare('SELECT COUNT(*) AS c FROM treatments WHERE staff_id=?').bind(id),
       db.prepare('SELECT COUNT(*) AS c FROM client_followups WHERE assigned_to=?').bind(id),
-      db.prepare('SELECT COUNT(*) AS c FROM web_accounts WHERE staff_id=?').bind(id)
+      db.prepare('SELECT COUNT(*) AS c FROM web_accounts WHERE staff_id=?').bind(id),
+      db.prepare('SELECT COUNT(*) AS c FROM admin_alerts WHERE staff_id=?').bind(id)
     ]);
     const scheduledCount=sched.results[0]?.c||0;
     if(scheduledCount>0){
       return response({error:`${existing.displayName} tiene ${scheduledCount} cita${scheduledCount===1?'':'s'} programada${scheduledCount===1?'':'s'}. Reasígnala${scheduledCount===1?'':'s'} o cancélala${scheduledCount===1?'':'s'} antes de retirarla.`},409);
     }
-    const hasHistory=(histAppt.results[0]?.c||0)+(histTr.results[0]?.c||0)+(histFollow.results[0]?.c||0)+(linkedAcct.results[0]?.c||0)>0;
+    const hasHistory=(histAppt.results[0]?.c||0)+(histTr.results[0]?.c||0)+(histFollow.results[0]?.c||0)+(linkedAcct.results[0]?.c||0)+(histAlerts.results[0]?.c||0)>0;
     const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date());
     if(hasHistory){
       await db.batch([

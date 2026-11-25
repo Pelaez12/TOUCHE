@@ -159,23 +159,6 @@ function renderRows() {
     tr.append(td(person),td(services),td(daysCell),td(badge),td(next),td(actions));$('rows').append(tr);
   }
 }
-function detail(row) {
-  $('detail-name').textContent=row.name;$('detail-phone').textContent=row.phone||'Teléfono no registrado';
-  const content=$('detail-content');content.replaceChildren();
-  content.append(text('p',row.returned?`Primer regreso del período: ${fmt(row.firstReturn)}.`:row.uncertain?'Hay fechas pendientes de revisión. El regreso no está confirmado.':'No hay regreso registrado en el período seleccionado.'));
-  content.append(text('p',`${row.visits} visitas únicas registradas hasta ${fmt(range().returnEnd)}. ${row.inDirectory?'Nombre coincidente con el directorio.':'Nombre sin coincidencia exacta en el directorio; identidad por revisar.'}`));
-  const next=suggestedAction(row);content.append(text('h3','Siguiente paso'),text('p',next.label+': '+next.description));
-  content.append(text('p','Último servicio registrado: '+row.lastServices.join(' / ')+' · '+fmt(row.latestVisit)));
-  const action=text('button',whatsappPhone(row.phone)?'Preparar mensaje de WhatsApp':'Completar teléfono','primary');
-  action.addEventListener('click',()=>{$('detail').close();whatsappPhone(row.phone)?composeMessage(row):editClient(row);});content.append(action);
-  content.append(text('h3','Historial utilizable'));
-  for(const e of row.events) {const item=text('div',`${fmt(e.date)} · ${e.service}`,'timeline');item.append(text('small',e.sheet?`${e.sheet} · ${e.originalCell||e.cell}${e.sourcePart>1?' · visita '+e.sourcePart:''}`:'Atención registrada desde Agenda'));if(e.dateResolution)item.append(text('small',e.dateResolution));content.append(item);}
-  if(row.uncertainRecords.length) {
-    content.append(text('h3','Fechas pendientes de revisión'));
-    for(const e of row.uncertainRecords) {const item=text('div',`${e.raw??'Sin fecha'} · ${e.service||''}`,'timeline');item.append(text('small',`${e.sheet} · ${e.cell}: ${e.reasons.join('; ')}`));content.append(item);}
-  }
-  $('detail').showModal();
-}
 function renderIssues() {
   $('issues').replaceChildren();
   for(const e of data.issues.slice(0,issueLimit)) {
@@ -218,7 +201,6 @@ for(const button of document.querySelectorAll('[data-status]'))button.addEventLi
 });
 $('more').addEventListener('click',()=>{limit+=30;renderRows();});
 $('more-issues').addEventListener('click',()=>{issueLimit+=50;renderIssues();});
-$('close-detail').addEventListener('click',()=>$('detail').close());
 $('export').addEventListener('click',()=>{
   if(!current)return;
   const dates=range();
@@ -246,7 +228,7 @@ try {
   $('returnStart').value=iso(year,month,1);$('returnEnd').value=latest;}
   for(const id of ['start','end','returnStart','returnEnd'])$(id).max=data.asOf;
   $('cutoff').textContent=`Historial actualizado al ${fmt(data.asOf)} · Última atención registrada: ${fmt(latest)}.`;
-  $('quality-count').textContent=`${data.issues.length} casos por revisar`;
+  $('quality-count').textContent=`${data.issues.length} ${data.issues.length===1?'caso':'casos'} por revisar`;
   const uniqueVisits=new Set(data.events.map(e=>e.clientId+'|'+e.date)).size;
   $('coverage').textContent=`${data.clients.length} clientas activas · ${data.events.length} atenciones registradas · ${uniqueVisits} visitas.`;
   renderIssues();renderHistory();renderCorrections();compute();

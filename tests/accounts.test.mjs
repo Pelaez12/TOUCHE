@@ -253,7 +253,10 @@ test('stylist isolation, arrival alerts (admin-only), and DB-validated self prof
   assert.equal('clientDni' in salonNotifs.body.appointments[0],false);
 
   // Miriam marks ONLY her own arrival -> generates Admin-only alert "Llegó la estilista Miriam"
-  const myArr=await req(db,'/api/agenda/my-arrival',{method:'POST',cookie:miriamCookie,body:{day:'2026-11-26'}});
+  // Stylists can only check in for today (Lima); other days are rejected
+  assert.equal((await req(db,'/api/agenda/my-arrival',{method:'POST',cookie:miriamCookie,body:{day:'2099-01-01'}})).status,400);
+  const todayLima=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date());
+  const myArr=await req(db,'/api/agenda/my-arrival',{method:'POST',cookie:miriamCookie,body:{day:todayLima}});
   assert.equal(myArr.status,200);
   assert.equal(myArr.body.shift.staffId,'staff-miriam');
   assert.equal(myArr.body.alertTitle,'Llegó la estilista Miriam');

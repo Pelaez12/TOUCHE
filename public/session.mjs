@@ -15,14 +15,6 @@ function syncRoleUI(user){
   const isStylist=scope==='stylist';
   document.body.dataset.role=user.role||'collaborator';
   document.body.dataset.scope=scope;
-  for(const el of document.querySelectorAll('.admin-only')){
-    if(el.classList.contains('page'))continue;
-    el.hidden=!isAdmin;
-  }
-  for(const el of document.querySelectorAll('.desk-only')){
-    if(el.classList.contains('page'))continue;
-    el.hidden=isStylist;
-  }
   const agendaNav=$('nav-agenda-label');
   if(agendaNav)agendaNav.textContent=isStylist?'Mi agenda':'Agenda';
   const ini=initials(user.displayName);

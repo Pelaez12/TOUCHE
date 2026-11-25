@@ -14,7 +14,7 @@ const CONFIRM_LABELS={unconfirmed:'Sin confirmar',reminded_day_before:'Recordada
 
 let date=today(),month=date.slice(0,7),appointments=[],clients=[],services=[],preferences=null;
 let staff=[],categoryCaps=[],serviceOverrides=[],exceptions=[],dailyShifts=[],adminAlerts=[];
-let activeFilter='all',agendaScope='all',scopeInitialized=false,noteDirty=false,loading=false,loadId=0,bootstrapped=false,editingAppointment=null;
+let activeFilter='all',agendaScope='all',scopeInitialized=false,noteDirty=false,loading=false,loadId=0,bootstrapped=false,editingAppointment=null,pendingOpenNewAppointment=false;
 
 function getMyStaff(){
   const sid=store.user?.staffId;
@@ -78,6 +78,8 @@ function renderAdminAlerts(){
     const when=al.createdAt?new Intl.DateTimeFormat('es-PE',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short',timeZone:'America/Lima'}).format(new Date(al.createdAt)):'';
     info.append(node('small',`${isArrival?'Registrado por':'Reportado por'} ${al.createdByName||al.createdByEmail}${when?' · '+when:''}`));
     const acts=node('div',undefined,'admin-alert-actions');
+    const advisoryMatch=!isArrival&&!al.appointmentId?String(al.message||'').match(/Cel\.\s*([+\d\s-]{7,15})/):null;
+    const extractedPhone=advisoryMatch?advisoryMatch[1].trim():'';
     if(!isArrival&&whatsappPhone(al.clientPhone)){
       const wa=node('button','Recordar por WhatsApp','tiny-btn message-button');wa.type='button';
       wa.addEventListener('click',()=>{
@@ -86,6 +88,13 @@ function renderAdminAlerts(){
         const time=al.startsAt?al.startsAt.slice(11,16):'';
         const msg=`Hola, ${name}. Te saludamos de Touché Hair Studio. Te recordamos tu cita de ${(al.serviceName||'tu servicio').toLocaleLowerCase('es')}${time?' a las '+time:''}${al.staffName?' con '+al.staffName:''}. ¿Vienes en camino o necesitas reprogramarla?`;
         window.open(whatsappLink(al.clientPhone,msg),'_blank','noopener,noreferrer');
+      });
+      acts.append(wa);
+    } else if(advisoryMatch&&whatsappPhone(extractedPhone)){
+      const wa=node('button','Contactar por WhatsApp','tiny-btn message-button');wa.type='button';
+      wa.addEventListener('click',()=>{
+        const msg='Hola 💕 Te saludamos de Touché Hair Studio. Recibimos tu solicitud de asesoría desde nuestra web y te escribimos para ayudarte.';
+        window.open(whatsappLink(extractedPhone,msg),'_blank','noopener,noreferrer');
       });
       acts.append(wa);
     }
@@ -604,8 +613,18 @@ async function load(forceBootstrap=false){
     if(location.hash==='#equipo')renderTeamPage();
     message('Agenda al día.');
     window.dispatchEvent(new CustomEvent('touche:agenda-updated',{detail:{appointments,date}}));
-  }catch(e){message(e.message,true);}
-  finally{loading=false;$('agenda-refresh').disabled=false;$('agenda-new').disabled=!preferences;}
+    if(pendingOpenNewAppointment&&preferences){
+      pendingOpenNewAppointment=false;
+      openEditor();
+    }
+  }catch(e){if(current===loadId)message(e.message,true);}
+  finally{
+    if(current===loadId){
+      loading=false;
+      $('agenda-refresh').disabled=false;
+      $('agenda-new').disabled=!preferences;
+    }
+  }
 }
 
 let apptClientMatches=[],apptClientActiveIdx=-1;
@@ -1155,54 +1174,6 @@ function renderStaffCapEditor(){
   renderStaffCatPanel();
 }
 
-function renderStaffModal(){
-  const activeList=$('staff-settings-list');activeList.replaceChildren();
-  const inactiveWrap=$('staff-inactive-wrap'),inactiveList=$('staff-inactive-list');
-  inactiveList.replaceChildren();
-  const actives=staff.filter(m=>m.active);
-  const inactives=staff.filter(m=>!m.active);
-
-  for(const m of actives){
-    const row=node('div',undefined,'staff-card-row');
-    const info=node('div',undefined,'staff-card-info');
-    const title=node('strong',`${m.displayName}${m.shortName&&m.shortName!==m.displayName?` (${m.shortName})`:''}`);
-    const meta=node('small',`${ROLE_LABELS[m.role]||m.role} · ${m.restWeekday===null||m.restWeekday===undefined?'Sin descanso fijo':'Descansa '+WEEKDAYS[m.restWeekday]}`);
-    const svcs=node('small',summarizeStaffServices(m),'staff-services-pill');
-    info.append(title,meta,svcs);
-
-    const actions=node('div',undefined,'staff-card-actions');
-    const editBtn=node('button','Editar y servicios','tiny-btn');editBtn.type='button';
-    editBtn.addEventListener('click',()=>openStaffEditor(m));
-    const delBtn=node('button','Retirar','tiny-btn danger-outline');delBtn.type='button';
-    delBtn.addEventListener('click',()=>openStaffDelete(m));
-    actions.append(editBtn,delBtn);
-
-    row.append(info,actions);
-    activeList.append(row);
-  }
-
-  inactiveWrap.hidden=inactives.length===0;
-  for(const m of inactives){
-    const row=node('div',undefined,'staff-card-row inactive');
-    const info=node('div',undefined,'staff-card-info');
-    info.append(node('strong',m.displayName),node('small',`${ROLE_LABELS[m.role]||m.role} · Retirada del equipo activo`));
-    const actions=node('div',undefined,'staff-card-actions');
-    const restoreBtn=node('button','Reactivar','tiny-btn');restoreBtn.type='button';
-    restoreBtn.addEventListener('click',async()=>{
-      restoreBtn.disabled=true;
-      try{
-        await api('/api/staff/'+m.id,{method:'PATCH',body:JSON.stringify({active:true})});
-        $('staff-settings-status').textContent=`${m.displayName} volvió al equipo activo.`;
-        await load();renderStaffModal();
-      }catch(e){$('staff-settings-status').textContent=e.message;restoreBtn.disabled=false;}
-    });
-    actions.append(restoreBtn);
-    row.append(info,actions);
-    inactiveList.append(row);
-  }
-  renderServiceDurations();
-}
-
 function openStaffEditor(member=null){
   editingStaffMember=member;
   $('staff-editor-form').reset();
@@ -1245,7 +1216,6 @@ function openStaffDelete(member){
 
 function setTeamStatus(msg){
   if($('team-page-status'))$('team-page-status').textContent=msg;
-  if($('staff-settings-status'))$('staff-settings-status').textContent=msg;
 }
 
 function renderDurationsInto(listEl,rawQuery,statusEl){
@@ -1275,10 +1245,6 @@ function renderDurationsInto(listEl,rawQuery,statusEl){
     });
     row.append(minI,maxI,btn);listEl.append(row);
   }
-}
-
-function renderServiceDurations(){
-  renderDurationsInto($('service-duration-list'),$('service-duration-search')?.value||'',$('staff-settings-status'));
 }
 
 function renderTeamPage(){
@@ -1363,7 +1329,7 @@ function renderTeamPage(){
         restoreBtn.disabled=true;
         try{
           await api('/api/staff/'+encodeURIComponent(m.id),{method:'PATCH',body:JSON.stringify({active:true})});
-          await load();renderTeamPage();if($('staff-modal')?.open)renderStaffModal();
+          await load();renderTeamPage();
           setTeamStatus(`${m.displayName} volvió al equipo activo.`);
         }catch(e){setTeamStatus(e.message);restoreBtn.disabled=false;}
       });
@@ -1375,7 +1341,6 @@ function renderTeamPage(){
   renderDurationsInto($('team-duration-list'),$('team-duration-search')?.value||'',$('team-page-status'));
 }
 
-$('staff-add-btn').addEventListener('click',()=>openStaffEditor(null));
 $('team-add-btn')?.addEventListener('click',()=>openStaffEditor(null));
 $('team-search')?.addEventListener('input',debounce(renderTeamPage,120));
 $('team-duration-search')?.addEventListener('input',debounce(()=>renderDurationsInto($('team-duration-list'),$('team-duration-search').value,$('team-page-status')),150));
@@ -1450,7 +1415,7 @@ $('staff-editor-form').addEventListener('submit',async e=>{
       shared=r1.sharedRestWith||[];
     }
     $('staff-editor-modal').close();
-    await load();renderTeamPage();if($('staff-modal')?.open)renderStaffModal();
+    await load();renderTeamPage();
     setTeamStatus(shared.length
       ?`Guardado. Aviso: comparte día de descanso con ${shared.join(', ')}.`
       :(id?'Colaboradora y servicios actualizados.':'Nueva colaboradora agregada al equipo.'));
@@ -1467,7 +1432,7 @@ $('staff-delete-confirm').addEventListener('click',async()=>{
   try{
     const res=await api('/api/staff/'+encodeURIComponent(pendingDeleteStaff.id),{method:'DELETE'});
     $('staff-delete-modal').close();pendingDeleteStaff=null;
-    await load();renderTeamPage();if($('staff-modal')?.open)renderStaffModal();
+    await load();renderTeamPage();
     setTeamStatus(res.message||'Colaboradora retirada del equipo.');
   }catch(err){
     $('staff-delete-error').textContent=err.message;$('staff-delete-error').hidden=false;
@@ -1514,8 +1479,6 @@ $('exception-form').addEventListener('submit',async e=>{
 
 $('agenda-team-btn').addEventListener('click',()=>{location.hash='#equipo';});
 $('agenda-exception-btn').addEventListener('click',()=>{renderExceptionModal();$('exception-modal').showModal();});
-$('service-duration-search').addEventListener('input',debounce(renderServiceDurations,150));
-for(const id of ['staff-modal-close','staff-modal-done'])$(id).addEventListener('click',()=>$('staff-modal').close());
 for(const id of ['exception-modal-close','exception-cancel'])$(id).addEventListener('click',()=>$('exception-modal').close());
 for(const id of ['appointment-close','appointment-cancel'])$(id).addEventListener('click',()=>$('appointment-editor').close());
 $('agenda-confirm-close').addEventListener('click',()=>$('agenda-confirm').close());
@@ -1546,6 +1509,11 @@ $('admin-alerts-btn')?.addEventListener('click',()=>{
   setTimeout(()=>$('admin-alerts-panel')?.scrollIntoView({behavior:'smooth',block:'nearest'}),120);
 });
 window.addEventListener('beforeunload',e=>{if(noteDirty){e.preventDefault();e.returnValue='';}});
+window.addEventListener('touche:open-new-appointment',()=>{
+  if(store.isStylist())return;
+  if(preferences&&!loading){openEditor();}
+  else{pendingOpenNewAppointment=true;if(!loading)load();}
+});
 window.addEventListener('touche:data-changed',()=>{bootstrapped=false;});
 window.addEventListener('touche:profile-updated',()=>{bootstrapped=false;if(location.hash==='#agenda'||location.hash==='#equipo')load(true);});
 window.addEventListener('touche:session-ready',()=>{

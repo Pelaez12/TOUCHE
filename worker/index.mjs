@@ -92,7 +92,10 @@ export default {
           env.DB.prepare('SELECT source_sheet AS sheet,source_cell AS cell,original_value AS originalValue,original_header AS originalHeader,dates_json AS datesJson,rule,review_date AS reviewDate FROM history_date_revisions ORDER BY source_sheet,source_cell')]);
         const archived=new Set(clients.results.map(c=>c.id));
         const sourceNames=new Map(events.results.map(e=>[e.sheet+'|'+e.originalCell,e.name]));
-        return json({source:batch.results[0]?.source_name,asOf:batch.results[0]?.as_of||new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date()),clients:clients.results,events:events.results,
+        const todayLima=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Lima'}).format(new Date());
+        const maxEventDate=events.results.reduce((m,e)=>e.date&&e.date>m?e.date:m,'');
+        const asOf=[batch.results[0]?.as_of,todayLima,maxEventDate].filter(Boolean).sort().at(-1);
+        return json({source:batch.results[0]?.source_name,asOf,clients:clients.results,events:events.results,
           issues:issues.results.map(x=>JSON.parse(x.source_json)).filter(x=>!x.clientId||archived.has(x.clientId)),services:services.results,
           dateRevisions:revisions.results.map(r=>({...r,name:sourceNames.get(r.sheet+'|'+r.cell)||'Ficha no activa',dates:JSON.parse(r.datesJson)})),storage:'cloudflare-d1'});
       }
